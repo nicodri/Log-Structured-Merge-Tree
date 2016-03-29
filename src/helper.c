@@ -1,189 +1,191 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
-void merge_with_positions(int list[], int positions[], int down, int middle, int top){
+void merge_with_values(int* keys, char* values, int down, int middle, int top,
+                       int value_size){
     int size = top - down + 1;
 
-    // Copying list and positions
-    int templist[size];
-    int temp_positions[size];
+    // Copying list and values (indices shifted of down)
+    int* temp_keys = (int*) malloc(size * sizeof(int));
+    char* temp_values = (char*) malloc(value_size * size * sizeof(char));
     for (int i=0; i < size; i++){
-        templist[i] = list[i + down];
-        temp_positions[i] = positions[i + down];
+        temp_keys[i] = keys[i + down];
+        strcpy(temp_values + i*value_size, values + (i+down)*value_size);
     }
 
     // Going through the sublists
-    int ileft = down;
-    int iright = middle + 1;
+    int ileft = 0;
+    int iright = middle + 1 - down;
     int i = down;
-    while ((ileft <= middle) && (iright <= top)){
-        if (templist[ileft - down] > templist[iright - down]){
-            list[i] = templist[iright - down];
-            positions[i++] = temp_positions[iright++ - down];
+    while ((ileft + down <= middle) && (iright + down <= top)){
+        if (temp_keys[ileft] > temp_keys[iright]){
+            keys[i] = temp_keys[iright];
+            strcpy(values + (i++)*value_size, temp_values + (iright++)*value_size);
         }
         else{
-            list[i] = templist[ileft - down];
-            positions[i++] = temp_positions[ileft++ - down];
+            keys[i] = temp_keys[ileft];
+            strcpy(values + (i++)*value_size, temp_values + (ileft++)*value_size);
         }
     }
 
     // Finishing the filling
-    while (ileft <= middle){
-        list[i] = templist[ileft - down];
-        positions[i++] = temp_positions[ileft++ - down];
+    while (ileft + down <= middle){
+        keys[i] = temp_keys[ileft];
+        strcpy(values + (i++)*value_size, temp_values + (ileft++)*value_size);
     }
-    while (iright <= top){
-        list[i] = templist[iright - down];
-        positions[i++] = temp_positions[iright++ - down];
+    while (iright + down <= top){
+        keys[i] = temp_keys[iright];
+        strcpy(values + (i++)*value_size, temp_values + (iright++)*value_size);
     }
+
+    // Freeing memory
+    free(temp_keys);
+    free(temp_values);
 
 }
 
-// Merge two sorted lists and updates the positions in the new list in
-// the two positions list
-void merge_components(int list1[], int list2[], int list[], int positions[],
-                       int size1, int size2){
+// Merge two sorted lists of keys and update the corresponding values from the two
+// values list in the array of values; the results are set in the second list of
+// keys and values (corresponds to the next component)
+// Tested: ok
+void merge_components(int* keys1, int* keys2, char* values1, char* values2,
+                      int size1, int size2, int value_size){
+    // Temporary files with a copy of keys2 and values2 because
+    // both files are modified inplace
+    int* keys2_temp = (int *) malloc(size2 * sizeof(int));
+    for (int i=0; i<size2; i++) keys2_temp[i] = keys2[i];
+    char* values2_temp = (char *) malloc(value_size * size2 * sizeof(char));
+    for (int i=0; i<size2; i++) strcpy(values2_temp + i*value_size,
+                                       values2 + i*value_size);
+
     // Going through the sublists
     int ileft = 0;
     int iright = 0;
     int i = 0;
     while ((ileft < size1) && (iright < size2)){
-        // Filling from list2
-        if (list1[ileft] > list2[iright]){
-            list[i] = list2[iright];
-            positions[size1 + iright++] = i++;
+        // Filling from keys2_temp
+        if (keys1[ileft] > keys2_temp[iright]){
+            keys2[i] = keys2_temp[iright];
+            strcpy(values2 + i*value_size, values2_temp + (iright++)*value_size);
         }
-        // Filling from list1
+        // Filling from keys1
         else{
-            list[i] = list1[ileft];
-            positions[ileft++] = i++;
+            keys2[i] = keys1[ileft];
+            strcpy(values2 + i*value_size, values1 + (ileft++)*value_size);
         }
+        i++;
     }
-
     // Finishing the filling
     while (ileft < size1){
-        list[i] = list1[ileft];
-        positions[ileft++] = i++;
+        keys2[i] = keys1[ileft];
+        strcpy(values2 + (i++)*value_size, values1 + (ileft++)*value_size);
     }
     while (iright < size2){
-        list[i] = list2[iright];
-        positions[size1 + iright++] = i++;
+        keys2[i] = keys2_temp[iright];
+        strcpy(values2 + (i++)*value_size, values2_temp + (iright++)*value_size);
     }
+    // Freeing the pointers
+    free(keys2_temp);
+    free(values2_temp);
 }
 
-// Sort list and argsort accordingly positions
-void merge_sort_with_positions(int list[], int positions[], int down, int top){
+// Sort inplace keys and values accordingly
+// down: first index
+// top: last index (i.e. size - 1)
+// Tested: ok
+void merge_sort_with_values(int* keys, char* values, int down, int top, int value_size){
     if (top - down > 0) {
         int middle = (top + down) / 2;
         // Sorting left
-        merge_sort_with_positions(list, positions, down, middle);
+        merge_sort_with_values(keys, values, down, middle, value_size);
         // Sorting right
-        merge_sort_with_positions(list, positions, middle + 1, top);
+        merge_sort_with_values(keys, values, middle + 1, top, value_size);
         // Merging
-        merge_with_positions(list, positions, down, middle, top);
+        merge_with_values(keys, values, down, middle, top, value_size);
     }
 }
 
-// Reorder list of values according to new position from positions
-// positions: stores positions of values in sorted array at the index corresponding
-//            to the old position (inside values)
-void update_values(int* values, int* positions, int value_size, int values_length){
-    // Output
-    int* new_values = (int *) malloc(values_length*value_size*sizeof(char));
-
-    for (int i=0; i<values_length; i++){
-        for (int k=0; k < value_size; k++){
-            new_values[i*value_size + k] = values[positions[i]*value_size + k];
-        }
-    }
-    // Swap input and output
-    values = new_values;
-}
-
-// Merge list of values according to new position from positions
-// positions: stores the concatenation of the positions for values1 and values2
-//            in the output values (merging values1 and valeus2) at each index
-//            to the old position (inside values)
-int* build_values(int* values1, int* values2, int* positions, int len1,
-                  int len2, int value_size){
-    // Output
-    int output_length = len1 + len2;
-    int* new_values = (int *) malloc(output_length*value_size*sizeof(char));
-
-    for (int i=0; i<len1; i++){
-        for (int k=0; k < value_size; k++){
-            new_values[positions[i]*value_size + k] = values1[i*value_size + k];
-        }
-    }
-    for (int i=len1; i<output_length; i++){
-        for (int k=0; k < value_size; k++){
-            new_values[positions[i]*value_size + k] = values2[(i - len1)*value_size + k];
-        }
-    }
-    return new_values;
-}
-
+// Testing merge_sort
 // int main(){
-//     // testing swap
-//     int list1[] = {1, 4, 5, 6};
-//     int list2[] = {2, 3, 7, 8};
-//     int *plist1 = list1;
-//     int *plist2 = list2;
-//     printf("list1\n");
-//     for (int i=0; i<4; i++) printf("%i, ", plist1[i]);
-//     printf("\n");
-//     printf("list2\n");
-//     for (int i=0; i<4; i++) printf("%i, ", plist2[i]);
-//     printf("\n");
-    
-//     // Swap list pointer
-//     swap(plist1, plist2);
-//     // int *temp = plist2;
-//     // plist2 = plist1;
-//     // plist1 = temp;
-//     printf("list1\n");
-//     for (int i=0; i<4; i++) printf("%i, ", plist1[i]);
-//     printf("\n");
-//     printf("list2\n");
-//     for (int i=0; i<4; i++) printf("%i, ", plist2[i]);
-//     printf("\n");
+//     int value_size = 16;
+//     // Keys
+//     int size = 1000;
+//     int *keys = (int *) malloc(size * sizeof(int));
+//     for (int i=0; i<size/2; i++) keys[i] = 2*i;
+//     for (int i=size/2; i<size; i++) keys[i] = 2*(i-size/2) + 1;
+
+//     // Values
+//     char* values = (char *) malloc(size*value_size*sizeof(char));
+//     char* value = (char *) malloc(value_size);
+//     for (int i=0; i<size/2; i++){
+//         // Filling value
+//         sprintf(value, "hello%d", (2*i)%150);
+//         strcpy(values + i*value_size, value);
+//     }
+//     for (int i=size/2; i<size; i++){
+//         // Filling value
+//         sprintf(value, "hello%d", (2*(i-size/2) + 1)%150);
+//         strcpy(values + i*value_size, value);
+//     }
+//     printf("Keys before Merge\n");
+//     for (int i = 0; i<size; i++) printf("%d\n", keys[i]);
+
+//     printf("Values before Merge\n");
+//     for (int i = 0; i<size; i++) printf("%s\n", values + i*value_size);
+
+//     merge_sort_with_values(keys, values, 0, size-1, value_size);
+
+//     printf("Keys after Merge\n");
+//     for (int i = 0; i<size; i++) printf("%d\n", keys[i]);
+
+//     printf("Values after Merge\n");
+//     for (int i = 0; i<size; i++) printf("%s\n", values + i*value_size);
 
 
 // }
 
+// Testing merge_component
 // int main(){
-//     //Test code
-//     int i;
-//     int size=9;
-//     int test[] = {0, 5, 2, 3, 1 , 8, 7, 6, 4};
-//     int positions[size];
-//     for (i=0; i<size; i++) positions[i] = i;
-//     for (i=0; i<size; i++) printf("%i, ", test[i]);
-//     printf("\n");
-//     for (i=0; i<size; i++) printf("%i, ", positions[i]);
-//     printf("\n");
-//     merge_sort_with_positions(test, positions, 0, size-1);
-//     for (i=0; i<size; i++) printf("%i, ", test[i]);
-//     printf("\n");
-//     for (i=0; i<size; i++) printf("%i, ", positions[i]);
-//     printf("\n");
+//     int value_size = 16;
+//     // Keys1
+//     int size1 = 1000;
+//     int *keys1 = (int *) malloc(size1 * sizeof(int));
+//     for (int i=0; i<size1; i++) keys1[i] = 2*i;
 
-//     printf("Testing on 2 lists\n");
-//     int size1 = 4;
-//     int size2 = 4;
-//     int new_size = size1 + size2;
-//     int list1[] = {1, 4, 5, 6};
-//     int list2[] = {2, 3, 7, 8};
-//     for (i=0; i<size1; i++) printf("%i, ", list1[i]);
-//     printf("\n");
-//     for (i=0; i<size2; i++) printf("%i, ", list2[i]);
-//     printf("\n");
-//     int list[new_size];
-//     int new_positions[new_size];
-//     merge_components(list1, list2, list, new_positions, size1, size2);
-//     for (i=0; i<new_size; i++) printf("%i, ", list[i]);
-//     printf("\n");
-//     for (i=0; i<(size1 + size2); i++) printf("%i, ", new_positions[i]);
-//     printf("\n");
+//     int size2 = 1000;
+//     int *keys2 = (int *) malloc((size2 + size1) * sizeof(int));
+//     for (int i=0; i<size2; i++) keys2[i] = 2*i + 1;
+
+//     // Values1
+//     char* values1 = (char *) malloc(size1*value_size*sizeof(char));
+//     char* value = (char *) malloc(value_size);
+//     for (int i=0; i < size1; i++){
+//         // Filling value
+//         sprintf(value, "hello%d", (2*i)%150);
+//         strcpy(values1 + i*value_size, value);
+//     }
+
+//     // Values2
+//     char* values2 = (char *) malloc((size1+size2)*value_size*sizeof(char));
+//     for (int i=0; i < size1; i++){
+//         // Filling value
+//         sprintf(value, "hello%d", (2*i+1)%150);
+//         strcpy(values2 + i*value_size, value);
+//     }
+
+//     printf("Keys before Merge\n");
+//     for (int i = 0; i<10; i++) printf("%d\n", keys2[i]);
+
+//     printf("Values before Merge\n");
+//     for (int i = 0; i<10; i++) printf("%s\n", values2 + i*value_size);
+
+//     merge_components(keys1, keys2, values1, values2, size1, size2, value_size);
+
+//     printf("Last Keys after Merge\n");
+//     for (int i = (size1 + size2)-10; i<(size1 + size2); i++) printf("%d\n", keys2[i]);
+
+//     printf("Last Values after Merge\n");
+//     for (int i = (size1 + size2)-10; i<(size1 + size2); i++) printf("%s\n", values2 + i*value_size);
 // }

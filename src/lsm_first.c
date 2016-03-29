@@ -6,46 +6,101 @@
 #define SIZE 1000
 // TODO: remove hard coding of VALUE_SIZE
 #define VALUE_SIZE 10
-#define FILENAME_SIZE 20
+#define FILENAME_SIZE 16
 
 
 typedef struct component {
     int *keys;
-    int *values;
-    long Ne; // number of elements stored
-    long S; // capacity
+    char *values;
+    int Ne; // number of elements stored
+    int S; // capacity
 } component;
 
 // First version: finit number of components
 typedef struct LSM_tree {
     char *name;
     // C0 and buffer are in main memory
-    component C0;
-    component buffer;
-    long Ne; // Total number of key/value tuples stored
-    long Nc; // Number of file components, ie components on disk
-    long *Cs_Ne; // List of number of elements per disk component
+    component *C0;
+    component *buffer;
+    int Ne; // Total number of key/value tuples stored
+    int Nc; // Number of file components, ie components on disk
+    int *Cs_Ne; // List of number of elements per disk component
     double *ratios; // TODO: linked list or dynamic array for unlimited case
-    // List of pointers to the files (at each level: 1 for the keys and 1 for the values)
-    // TODO: stores directly a pointer to the files (currently stores the filename)
-    char *file_components; 
 } LSM_tree;
 
 
-// Initialize component
-component init_component(long component_size, long value_size){
-    component c;
-    c.keys = (int *) malloc(component_size*sizeof(long));
-    c.values = (int *) malloc(component_size*value_size*sizeof(char));
-    c.Ne = 0;
-    c.S = component_size;
-
-    return c;
+// Component constructor
+void init_component(component * c, int component_size, int value_size){
+    c->keys = (int *) malloc(component_size*sizeof(int));
+    c->values = (char *) malloc(component_size*value_size*sizeof(char));
+    c->Ne = 0;
+    c->S = component_size;
 }
 
-component read_disk_component(char filename_keys[], char filename_values[],
-                              long Ne, long S, long value_size){
-    component C = init_component(Ne, S);
+// Component destructor
+void free_component(component *c){
+    free(c->keys);
+    free(c->values);
+    free(c);
+}
+
+
+// Initialize LSM_tree object with metadata and C0
+// name need to be at most 7 car int
+// TODO: check the validity of the args (ratios, Csize)
+void init(LSM_tree *lsm, char name[8], int S0, int buffer_size, int Nc, double* ratios){
+    // name
+    lsm->name = (char*)malloc(sizeof(char) * 32);
+    strcpy(lsm->name, name);
+    // Initialize C0 and buffer
+    lsm->C0 = (component *) malloc(sizeof(component));
+    init_component(lsm->C0, S0, VALUE_SIZE);
+    lsm->buffer = (component *) malloc(sizeof(component));
+    init_component(lsm->buffer, buffer_size, VALUE_SIZE);
+
+    // Int members
+    lsm->Nc = Nc;
+    lsm->Ne = 0;
+    // TODO: read ratios from a file or input
+    lsm->ratios = (double *) malloc(Nc*sizeof(double));
+    // TODO: read from disk the number of elements per layer
+    lsm->Cs_Ne = (int *) malloc(Nc*sizeof(int));
+    for (int i=0; i < Nc; i++){
+        lsm->ratios[i] = ratios[i];
+        lsm->Cs_Ne[i] = 0;
+    }
+    // Initialize components on disk:
+    // v1: finite number of components
+    // Standardized name of files in the local directory name/
+    // keys: kC%d.data, component number
+    // values: vC%d.data, component number
+    
+    // lsm->file_components = (char*)malloc(2*Nc*FILENAME_SIZE*sizeof(char));
+    // char str[256];
+    // FILE *f;
+    // for (int i=0; i < Nc; i++){
+    //     // TODO: use the name of the lsm to create a subdirectory for the lsm
+    //     // Initialize keys file
+    //     sprintf(str, "kC%d", i+1);
+    //     strcpy(lsm->file_components + 2*i*FILENAME_SIZE, str);
+    //     sprintf(str, "kC%d.data", i+1);
+    //     f = fopen(str, "wb");
+    //     fclose(f);
+
+    //     // // Initialize values file
+    //     sprintf(str, "vC%d", i+1);
+    //     strcpy(lsm->file_components + (2*i + 1)*FILENAME_SIZE , str);
+    //     sprintf(str, "vC%d.data", i+1);
+    //     f = fopen(str, "wb");
+    //     fclose(f);
+    // }
+}
+
+
+void read_disk_component(component* C, char filename_keys[], char filename_values[],
+                              int Ne, int S, int value_size){
+    // Initializing component
+    init_component(C, S, value_size);
     // Reading keys
     FILE *fkeys;
     if ((fkeys = fopen(filename_keys, "rb")) == NULL) {
@@ -53,7 +108,7 @@ component read_disk_component(char filename_keys[], char filename_values[],
         exit(1);
     }
     else {
-        fread(C.keys, sizeof(long), Ne, fkeys);
+        fread(C->keys, sizeof(int), Ne, fkeys);
         //Debug:
         //for (int i=0; i<20; i++) printf("%ld\n", C[i]);
         fclose(fkeys);
@@ -66,89 +121,36 @@ component read_disk_component(char filename_keys[], char filename_values[],
         exit(1);
     }
     else {
-        fread(C.values, value_size, Ne, fvalues);
+        fread(C->values, value_size, Ne, fvalues);
         //Debug:
         //for (int i=0; i<20; i++) printf("%ld\n", C[i]);
         fclose(fvalues);
     }
-    return C;
-
 }
 
-void write_disk_component(component *pC, char filename_keys[], char filename_values[], long value_size){
+void write_disk_component(component *pC, char filename_keys[], char filename_values[],
+                          int value_size){
     // Write keys
     FILE *fkeys = fopen(filename_keys, "wb");
-    fwrite(pC->keys, sizeof(long), pC->Ne, fkeys);
+    fwrite(pC->keys, sizeof(int), pC->Ne, fkeys);
     fclose(fkeys);
 
-    // Write values
+    // Debug: TOFIX
+    // printf("First 10 values of C1 to write are\n");
+    // for (int i=0; i<10; i++) {
+    //     for (int k=0; k < VALUE_SIZE; k++){
+    //         printf("%c", pC->values[i*VALUE_SIZE + k]);
+    //     }
+    //     printf("\n");
+    // }
+
+    // Write values: 
     FILE *fvalues = fopen(filename_values, "wb");
-    fwrite(pC->values, sizeof(value_size), pC->Ne, fvalues);
+    fwrite(pC->values, VALUE_SIZE*sizeof(char), pC->Ne, fvalues);
     fclose(fvalues);
 }
 
-// Initialize LSM_tree object with metadata and C0
-// name need to be at most 7 car long
-// TODO: check the validity of the args (ratios, Csize)
-LSM_tree init(char name[8], long S0, long buffer_size, long Nc, double* ratios){
-    LSM_tree lsm;
-    lsm.name = name;
-    // Initialize C0 and buffer(on memory)
-    lsm.C0 = init_component(S0, VALUE_SIZE);
-    lsm.buffer = init_component(buffer_size, VALUE_SIZE);
-
-    lsm.Nc = Nc;
-    lsm.Ne = 0;
-    // TODO: read ratios from a file or input
-    lsm.ratios = (double *) malloc(Nc*sizeof(double));
-    lsm.Cs_Ne = (long *) malloc(Nc*sizeof(long));
-    for (int i=0; i < Nc; i++){
-        lsm.ratios[i] = ratios[i];
-        lsm.Cs_Ne[i] = 0;
-    }
-    // Initialize components on disk:
-    // v1: finite number of components
-    // TODO: handle array of chars
-    // BUGGY: the string in file_components are not properly read by next functions
-    lsm.file_components = (char *) malloc(2*Nc*FILENAME_SIZE*sizeof(char));
-    char filename[2*Nc][FILENAME_SIZE];
-    FILE *f;
-    int k;
-    for (int i=0; i < Nc; i++){
-        // TODO: use the name of the lsm to create a subdirectory for the lsm
-        // Initialize keys file
-        sprintf(filename[2*i], "kC%d.data", i+1);
-        f = fopen(filename[2*i], "wb");
-        fclose(f);
-        // copy filename into file_components
-        //  TODO: improve this way of doing
-        k = 0;
-        while (filename[2*i][k] != '\0'){
-            lsm.file_components[2*i + k] = filename[2*i][k];
-            k++;
-        }
-
-        // Initialize values file
-        sprintf(filename[2*i + 1], "vC%d.data", i+1);
-        f = fopen(filename[2*i + 1], "wb");
-        fclose(f);
-        // copy filename into file_components
-        //  TODO: improve this way of doing
-        k = 0;
-        while (filename[2*i][k] != '\0'){
-            lsm.file_components[2*i + k] = filename[2*i][k];
-            k++;
-        }
-    }
-    // Copying the pointer
-    // access the keys of component number C_number with
-    lsm.file_components = filename[0];
-    // BUGGY: read perfectly fine here
-    printf("Correct read inside init: %s\n", lsm.file_components);
-    return lsm;
-}
-
-void append_lsm(LSM_tree *lsm, long key, char *value){
+void append_lsm(LSM_tree *lsm, int key, char *value){
     // TODO: check validity of the args (size of the value, ...)
     // BUGGY: read wrong here
     // printf("False read inside append: %s\n", lsm->file_components);
@@ -157,107 +159,133 @@ void append_lsm(LSM_tree *lsm, long key, char *value){
     // printf("\n");
 
     // Append to C0
-    component *C0 = &lsm->C0;
-    C0->keys[C0->Ne] = key;
-    // value is array of char => need to copy each char
-    for (int i = 0; i < VALUE_SIZE; i++){
-        C0->values[VALUE_SIZE*(C0->Ne) + i] = value[i];
-    }
-    C0->Ne++;
+    lsm->C0->keys[lsm->C0->Ne] = key;
+    strcpy(lsm->C0->values + lsm->C0->Ne*VALUE_SIZE, value);
+    lsm->C0->Ne++;
 
     // Merging operations
     
     // Check if C0 is full
-    if (C0->Ne >= C0->S){
+    if (lsm->C0->Ne >= lsm->C0->S){
         // Sorting C0
-        // Initializing positions
-        int positions[C0->S];
-        // TODO: removing this initialization as it's always the same
-        for (int i=0; i<C0->S; i++) positions[i] = i;
-        // Inplace sorting of C0->keys and corresponding argsort in positions
-        merge_sort_with_positions(C0->keys, positions, 0, C0->S-1);
-        // updating values
-        // TODO: updates values AFTER the merge to avoid moving twice values
-        update_values(C0->values, positions, VALUE_SIZE, C0->S);
+        // Inplace sorting of C0->keys and corresponding reorder in C0->values
+        merge_sort_with_values(lsm->C0->keys, lsm->C0->values, 0, lsm->C0->S-1, VALUE_SIZE);
 
         // Merge C0 into buffer
-        component *buffer = &lsm->buffer;
         // case empty buffer
-        if (buffer->Ne == 0){
+        if (lsm->buffer->Ne == 0){
+            // WARNING: pointer do not point to the same size in memory!!!
+            // ==> need to reallocate
             // swap pointers (impossible in function because we swap value)
-            int *temp = buffer->keys;
-            buffer->keys = C0->keys;
-            C0->keys = temp;
-            temp = buffer->values;
-            buffer->values = C0->values;
-            C0->values = temp;
+            int *tempk = lsm->buffer->keys;
+            lsm->buffer->keys = lsm->C0->keys;
+            lsm->C0->keys = tempk;
+            char *tempv = lsm->buffer->values;
+            lsm->buffer->values = lsm->C0->values;
+            lsm->C0->values = tempv;
+
+            // Reallocate memory
+            // keys
+            // TOFIX: we assume that size of C0 is lower than size of buffer
+            // realloc cant raise an error on C0
+            realloc(lsm->C0->keys, (lsm->C0->S) * sizeof(int));
+            int *tmpk = realloc(lsm->buffer->keys, (lsm->buffer->S) * sizeof(int));
+            if (tmpk == NULL)
+            {
+                // could not realloc, alloc new space and copy
+                int *newk = (int *) malloc((lsm->buffer->S) * sizeof(int));
+                for (int i=0; i < lsm->buffer->Ne + lsm->C0->Ne; i++) newk[i] = lsm->buffer->keys[i];
+                free(lsm->buffer->keys);
+                lsm->buffer->keys = newk;
+            }
+            else
+            {
+                lsm->buffer->keys = tmpk;
+            }
+
+            // values
+            // TOFIX: we assume that size of C0 is lower than size of buffer
+            // realloc cant raise an error on C0
+            realloc(lsm->C0->values, VALUE_SIZE * (lsm->C0->S) * sizeof(char));
+            char *tmpv = realloc(lsm->buffer->values, VALUE_SIZE * (lsm->buffer->S) * sizeof(char));
+            if (tmpv == NULL)
+            {
+                // could not realloc, alloc new space and copy
+                char *newv = (char *) malloc(VALUE_SIZE * (lsm->buffer->S) * sizeof(char));
+                for (int i=0; i < lsm->buffer->Ne + lsm->C0->Ne; i++)strcpy(newv + i*VALUE_SIZE,
+                                                                            lsm->buffer->values + i*VALUE_SIZE);
+                free(lsm->buffer->values);
+                lsm->buffer->values = newv;
+            }
+            else
+            {
+                lsm->buffer->values = tmpv;
+            }
         }
         else{
             // We don't free the memory in C0, we just update the number of elements
             // in it.
-            int merged_keys[C0->Ne + buffer->Ne];
-            int merged_positions[C0->Ne + buffer->Ne];
-            merge_components(C0->keys, buffer->keys, merged_keys, merged_positions,
-                           C0->Ne, buffer->Ne);
-            buffer->keys = merged_keys;
-            // Merging values
-            buffer->values = build_values(C0->values, buffer->values, merged_positions,
-                                          C0->Ne, buffer->Ne, VALUE_SIZE);
+            merge_components(lsm->C0->keys, lsm->buffer->keys, lsm->C0->values,
+                             lsm->buffer->values, lsm->C0->Ne, lsm->buffer->Ne,
+                             VALUE_SIZE);
         }
         // Updates number of elements
-        buffer->Ne += C0->Ne;
-        C0->Ne = 0;
+        lsm->buffer->Ne += lsm->C0->Ne;
+        lsm->C0->Ne = 0;
     }
 
     // Check if buffer is full
-    component *buffer = &lsm->buffer;
     // TODO: Build a function to iterate over the component needed to be merged
     // the component on disk is put into a component struct, so exact same behavior
     // as when merging C0 into buffer except we need to write to the disk afterwards.
-    if (buffer->Ne >= buffer->S){
-        // Compute component size
-        long Csize = lsm->ratios[0] * buffer->S;
-        int Cnumber = 0;
-        // read from disk the content of next component (here C1)
-        // BUGGY
-        //char * filename_keys = (lsm->file_components) + 2*Cnumber*FILENAME_SIZE;
-        //char * filename_values = lsm->file_components + (2*Cnumber + 1)*FILENAME_SIZE;
-        char filename_keys[] = "kC1.data";
-        char filename_values[] = "kC1.data";
-        component dC = read_disk_component(filename_keys, filename_values, lsm->Cs_Ne[Cnumber], Csize, VALUE_SIZE);
-        // WARNING: hard encoding of the component number
-        
-        // case empty next component dC
-        // TODO: manipulate pointer to dC
-        component *pDc = &dC;
-        if (pDc->Ne == 0){
-            // swap pointers (impossible in function because we swap value)
-            int *temp = buffer->keys;
-            buffer->keys = pDc->keys;
-            pDc->keys = temp;
-            temp = buffer->values;
-            buffer->values = pDc->values;
-            pDc->values = temp;
-        }
-        else{
-            // We don't free the memory in buffer (ie prev component), we just update the number of elements
-            // in it.
-            int merged_keys[buffer->Ne + pDc->Ne];
-            int merged_positions[buffer->Ne + pDc->Ne];
-            merge_components(buffer->keys, pDc->keys, merged_keys, merged_positions,
-                             buffer->Ne, pDc->Ne);
-            pDc->keys = merged_keys;
-            // Merging values
-            pDc->values = build_values(buffer->values, pDc->values, merged_positions,
-                                       buffer->Ne, pDc->Ne, VALUE_SIZE);
-        }
-        // Updates number of elements
-        pDc->Ne += buffer->Ne;
-        buffer->Ne = 0;
-
-        // Write the component to disk
-        write_disk_component(pDc, filename_keys, filename_values, VALUE_SIZE);
-    }
+    // if (lsm->buffer->Ne >= lsm->buffer->S){
+    //     // Compute component size
+    //     int Csize = lsm->ratios[0] * lsm->buffer->S;
+    //     int Cnumber = 0;
+    //     // read from disk the content of next component (here C1)
+    //     char *filename_keys = lsm->file_components + 2*Cnumber*FILENAME_SIZE;
+    //     char *filename_values = lsm->file_components + (2*Cnumber + 1)*FILENAME_SIZE;
+    //     char keys_name[FILENAME_SIZE];
+    //     sprintf(keys_name, "%s.data", filename_keys);
+    //     char values_name[FILENAME_SIZE];
+    //     sprintf(values_name, "%s.data", filename_values);
+    //     printf("%s\n", values_name);
+    //     // Copying next component to memory
+    //     component *dC = (component *) malloc(sizeof(component));
+    //     read_disk_component(dC, keys_name, values_name,
+    //                         lsm->Cs_Ne[Cnumber], Csize, VALUE_SIZE);
+    //     // WARNING: hard encoding of the component number
+    //     // case empty next component dC
+    //     // TODO: manipulate pointer to dC
+    //     if (dC->Ne == 0){
+    //         // swap pointers (impossible in function because we swap value)
+    //         int *tempk2 = lsm->buffer->keys;
+    //         lsm->buffer->keys = dC->keys;
+    //         dC->keys = tempk2;
+    //         char *tempv2 = lsm->buffer->values;
+    //         lsm->buffer->values = dC->values;
+    //         dC->values = tempv2;
+    //     }
+    //     else{
+    //         // We don't free the memory in buffer (ie prev component), we just update the number of elements
+    //         // in it.
+    //         int merged_keys[lsm->buffer->Ne + dC->Ne];
+    //         int merged_positions[lsm->buffer->Ne + dC->Ne];
+    //         merge_components(lsm->buffer->keys, dC->keys, merged_keys, merged_positions,
+    //                          lsm->buffer->Ne, dC->Ne);
+    //         dC->keys = merged_keys;
+    //         // Merging values
+    //         dC->values = build_values(lsm->buffer->values, dC->values, merged_positions,
+    //                                    lsm->buffer->Ne, dC->Ne, VALUE_SIZE);
+    //     }
+    //     // Updates number of elements
+    //     dC->Ne += lsm->buffer->Ne;
+    //     // Update the number in the lsm object
+    //     lsm->Cs_Ne[Cnumber] = dC->Ne;
+    //     lsm->buffer->Ne = 0;
+    //     // Write the component to disk
+    //     write_disk_component(dC, keys_name, values_name, VALUE_SIZE);
+    // }
 }
 
 // Test storing on disk an array
@@ -268,58 +296,94 @@ int main(){
     int Nc = 4;
     double ratios[] = {3, 3, 3, 3};
 
-    LSM_tree lsm = init(name, SIZE, 3*SIZE, Nc, ratios);
+    LSM_tree lsm;
+    init(&lsm, name, SIZE, 4*SIZE, Nc, ratios);
 
     // filling the lsm
-    long size_test = 3100;
+    int size_test = 3100;
     char value[VALUE_SIZE];
-    for (long i=0; i < size_test; i++){
+    // adding even keys
+    for (int i=0; i < size_test/2; i++){
         // Filling value
-        sprintf(value, "hello%ld", i%150);
-        append_lsm(&lsm, i, value);
+        sprintf(value, "hello%d", (2*i)%150);
+        append_lsm(&lsm, (2*i), value);
+    }
+    // adding odd keys
+    for (int i=size_test/2; i < size_test; i++){
+        // Filling value
+        sprintf(value, "hello%d", (2*(i-size_test/2) + 1)%150);
+        append_lsm(&lsm, 2*(i-size_test/2) + 1, value);
     }
 
-    printf("Number of elements in C0: %ld\n", lsm.C0.Ne);
-    printf("Number of elements in buffer: %ld\n", lsm.buffer.Ne);
-    printf("Number of elements in C1: %ld\n", lsm.Cs_Ne[0]);
+    // printf("Read after append: %s\n", lsm.file_components);
+    // printf("Read after append: %s\n", lsm.file_components + FILENAME_SIZE);
+
+    printf("Number of elements in C0: %d\n", lsm.C0->Ne);
+    printf("Number of elements in buffer: %d\n", lsm.buffer->Ne);
+    printf("Number of elements in C1: %d\n", lsm.Cs_Ne[0]);
     // Testing filling of the buffer
     printf("Reading key and value in buffer after merge\n");
-    long index = 10;
-    printf("index is: %ld\n", index);
-    printf("key in C0 is %d\n", lsm.C0.keys[index]);
+    int index = 10;
+    printf("index is: %d\n", index);
+    printf("key in C0 is %d\n", lsm.C0->keys[index]);
     printf("value in C0 is: ");
     for (int i=0; i < VALUE_SIZE; i++){
-        printf("%c", lsm.C0.values[index*VALUE_SIZE + i]);
+        printf("%c", lsm.C0->values[index*VALUE_SIZE + i]);
     }
     printf("\n");
-    printf("key in the buffer is %d\n", lsm.buffer.keys[index]);
+    printf("key in the buffer is %d\n", lsm.buffer->keys[index]);
     printf("value in buffer is: ");
     for (int i=0; i < VALUE_SIZE; i++){
-        printf("%c", lsm.buffer.values[index*VALUE_SIZE + i]);
+        printf("%c", lsm.buffer->values[index*VALUE_SIZE + i]);
     }
     printf("\n");
 
     // Print sequence of keys
     printf("First 10 keys of the buffer are\n");
     for (int i=0; i < 10; i++){
-        printf("%d \n", lsm.buffer.keys[i]);
+        printf("%d \n", lsm.buffer->keys[i]);
+    }
+    printf("Last 10 keys of the buffer are\n");
+    for (int i=lsm.buffer->Ne - 10; i < lsm.buffer->Ne; i++){
+        printf("%d \n", lsm.buffer->keys[i]);
     }
     printf("First 10 keys of CO are\n");
     for (int i=0; i < 10; i++){
-        printf("%d \n", lsm.C0.keys[i]);
+        printf("%d \n", lsm.C0->keys[i]);
     }
 
-    // Read from C1
+    // Read keys from C1
     // FILE *fC;
-    // long Ckeys[lsm.Cs_Ne[0]];
+    // int *Ckeys = (int *) malloc((lsm.Cs_Ne[0])*sizeof(int));
     // char filename[] = "kC1.data";
     // if ((fC = fopen(filename, "rb")) == NULL) {
     //     fprintf(stderr, "can't open file %s \n", filename);
     //     exit(1);
     // } else {
-    //     fread(Ckeys, sizeof(long), sizeof(Ckeys), fC);
+    //     printf("Reading keys of C1\n");
+    //     printf("Size is %ld\n", lsm.Cs_Ne[0]);
+    //     fread(Ckeys, sizeof(int), lsm.Cs_Ne[0], fC);
     //     printf("First 10 keys of C1 are\n");
-    //     for (int i=0; i<10; i++) printf("%ld\n", Ckeys[i]);
+    //     for (int i=2000; i<2010; i++) printf("%ld\n", Ckeys[i]);
+    //     fclose(fC);
+    // }
+
+    // Read values from C1
+    // char *Cvalues = (char *) malloc(VALUE_SIZE*(lsm.Cs_Ne[0])*sizeof(char));
+    // char filename2[] = "kC1.data";
+    // if ((fC = fopen(filename2, "rb")) == NULL) {
+    //     fprintf(stderr, "can't open file %s \n", filename);
+    //     exit(1);
+    // } else {
+    //     printf("Reading values of C1\n");
+    //     fread(Cvalues, VALUE_SIZE*sizeof(char), lsm.Cs_Ne[0], fC);
+    //     printf("First 10 values of C1 are\n");
+    //     for (int i=0; i<10; i++) {
+    //         for (int k=0; k < VALUE_SIZE; k++){
+    //             printf("%c", Cvalues[i*VALUE_SIZE + k]);
+    //         }
+    //         printf("\n");
+    //     }
     //     fclose(fC);
     // }
 }

@@ -46,17 +46,29 @@ FILE *fvalues;
     //     fclose(fC);
     // }
 
+typedef struct LSM_test {
+    char *file_components; 
+} LSM_test;
+
+LSM_test init(int N, int M){
+    LSM_test lsm;
+    char str[M];
+    for (int i=0; i < N; i++){
+        // TODO: use the name of the lsm to create a subdirectory for the lsm
+        // Initialize keys file
+        sprintf(str, "kC%d", i);
+        strcpy(lsm.file_components + i*M, str);
+    }
+    // Copying the pointer
+    // access the keys of component number C_number with
+    // BUGGY: read perfectly fine here
+    printf("Correct read inside init: %s\n", lsm.file_components);
+    printf("Correct read inside init: %s\n", lsm.file_components + M);
+    return lsm;
+}
 
 int main(){
-    char a[2][14];
-    strcpy(a[0], "blah");
-    strcpy(a[1], "hmm");
-
-    printf("%s\n", a[0]);
-    if (a[0][3] == '\0') printf("TRUE\n");
-    printf("%c\n", a[0][4]);
-    printf("%s\n", a[1]);
-    char *t = a[0];
-    printf("%s\n", t + 14);
-    //printf("%s\n", t[1]);
+    LSM_test lsm = init(3, 20);
+    printf("Wrong read inside init: %s\n", lsm.file_components);
+    printf("Wrong read inside init: %s\n", lsm.file_components + 20);
 }
