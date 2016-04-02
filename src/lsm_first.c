@@ -341,8 +341,9 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
         read_disk_component(next_component, lsm->name, lsm->Cs_Ne + (current_C_index+1),
                             component_id,lsm->Cs_size + (current_C_index+1),
                             VALUE_SIZE);
-        printf("Before Merging\n");
-        printf("Ne in next Component: %d\n", *(next_component->Ne));
+        // Debug
+        // printf("Before Merging\n");
+        // printf("Ne in next Component: %d\n", *(next_component->Ne));
         if (next_component->Ne == 0){
             swap_component_pointer(current_component, next_component);
         }
@@ -354,16 +355,18 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
                              *(current_component->Ne), *(next_component->Ne),
                              VALUE_SIZE);
         }
-        printf("Before update\n");
-        printf("Ne in current Component: %d\n", *(current_component->Ne));
-        printf("Ne in next Component: %d\n", *(next_component->Ne));
+        // Debug
+        // printf("Before update\n");
+        // printf("Ne in current Component: %d\n", *(current_component->Ne));
+        // printf("Ne in next Component: %d\n", *(next_component->Ne));
         // Updates number of elements
         lsm->Cs_Ne[current_C_index + 1] += lsm->Cs_Ne[current_C_index];
         lsm->Cs_Ne[current_C_index] = 0;
 
-        printf("after update\n");
-        printf("Ne in current Component: %d\n", *(current_component->Ne));
-        printf("Ne in next Component: %d\n", *(next_component->Ne)); 
+        // Debug
+        // printf("after update\n");
+        // printf("Ne in current Component: %d\n", *(current_component->Ne));
+        // printf("Ne in next Component: %d\n", *(next_component->Ne)); 
 
         // Write the component to disk
         // TODO: write also done for the buffer (need to do it as a log)
@@ -488,10 +491,11 @@ int main(){
     // Creating lsm structure:
     // buffer_size = 3 * C0_size
     char name[] = "test";
-    int Nc = 4;
-    int size_test = 18100;
+    int Nc = 6;
+    int size_test = 1000000;
     // List contains Nc+2 elements: [C0, buffer, C1, C2,...]
-    int Cs_size[] = {SIZE, 3*SIZE, 9*SIZE, 27*SIZE, 27*SIZE, 27*SIZE};
+    // Last component with very big size (as finite number of components chosen)
+    int Cs_size[] = {SIZE, 3*SIZE, 9*SIZE, 27*SIZE, 81*SIZE, 729*SIZE, 9*729*SIZE, 1000000000};
 
     LSM_tree lsm;
     build_lsm(&lsm, name, Nc, Cs_size);
@@ -508,10 +512,12 @@ int main(){
 
     // Unsorted keys
     // adding even keys
+    int j;
     for (int i=0; i < size_test/2; i++){
+        j = size_test/2 - i - 1;
         // Filling value
-        sprintf(value, "hello%d", (2*i)%150);
-        append_lsm(&lsm, (2*i), value);
+        sprintf(value, "hello%d", (2*j)%150);
+        append_lsm(&lsm, (2*j), value);
     }
     // adding odd keys
     for (int i=size_test/2; i < size_test; i++){
@@ -524,28 +530,9 @@ int main(){
     // printf("Read after append: %s\n", lsm.file_components + FILENAME_SIZE);
 
     printf("Number of elements in LSMTree: %d\n", lsm.Ne);
-    printf("Number of elements in C0: %d\n", lsm.Cs_Ne[0]);
-    printf("Number of elements in C0: %d\n", *(lsm.C0->Ne));
-    printf("Number of elements in buffer: %d\n", lsm.Cs_Ne[1]);
-    printf("Number of elements in buffer: %d\n", *(lsm.buffer->Ne));
-    printf("Number of elements in C1: %d\n", lsm.Cs_Ne[2]);
-    printf("Number of elements in C2: %d\n", lsm.Cs_Ne[3]);
-    // Testing filling of the buffer
-    printf("Reading key and value in buffer after merge\n");
-    int index = 10;
-    printf("index is: %d\n", index);
-    printf("key in C0 is %d\n", lsm.C0->keys[index]);
-    printf("value in C0 is: ");
-    for (int i=0; i < VALUE_SIZE; i++){
-        printf("%c", lsm.C0->values[index*VALUE_SIZE + i]);
-    }
-    printf("\n");
-    printf("key in the buffer is %d\n", lsm.buffer->keys[index]);
-    printf("value in buffer is: ");
-    for (int i=0; i < VALUE_SIZE; i++){
-        printf("%c", lsm.buffer->values[index*VALUE_SIZE + i]);
-    }
-    printf("\n");
+    printf("Number of elements in C0: %d / %d\n", lsm.Cs_Ne[0], lsm.Cs_size[0]);
+    printf("Number of elements in buffer: %d / %d\n", lsm.Cs_Ne[1], lsm.Cs_size[1]);
+    for (int i=2; i<Nc+2; i++) printf("Number of elements in C%d: %d / %d\n",i-1, lsm.Cs_Ne[i], lsm.Cs_size[i]);
 
     // Print sequence of keys
     printf("First 10 keys of the buffer are\n");
@@ -559,6 +546,21 @@ int main(){
     printf("First 10 keys of CO are\n");
     for (int i=0; i < 10; i++){
         printf("%d \n", lsm.C0->keys[i]);
+    }
+
+    // Printing first element of disk component (read from disk)
+    int disk_index = 5;
+    char * comp_id = (char *) malloc(10*sizeof(char));
+    sprintf(comp_id, "C%d", disk_index);
+
+    component * C = (component *) malloc(sizeof(component));
+    read_disk_component(C, name, lsm.Cs_Ne + disk_index+1, comp_id, lsm.Cs_size + disk_index+1, VALUE_SIZE);
+
+    // Printing
+    printf("First 10 keys of %s are\n", comp_id);
+    for (int i=0; i < 10; i++){
+        printf("%d \n", C->keys[i]);
+    
     }
 
     // Reading from lsm
