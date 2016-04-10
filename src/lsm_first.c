@@ -10,7 +10,6 @@
 
 // Questions to ask
 // 1) Reading part of file on disk (when too large)
-// 2) Best way to delete
 // 3) Best between finite or unfinite number (practically how do we do them?)
 // 4) Priority rule in C: *intpointer*3 ?
 
@@ -40,13 +39,15 @@ typedef struct LSM_tree {
 void init_component(component * c, int* component_size, int value_size, int* Ne,
                     char* component_id){
     c->keys = (int *) malloc((*component_size)*sizeof(int));
-    c->values = (char *) malloc((*component_size)*value_size*sizeof(char));
+    // Valgrind modif: malloc to calloc (because of padding)
+    c->values = (char *) calloc((*component_size)*value_size, sizeof(char));
     c->Ne = Ne;
     c->S = component_size;
     c->component_id = component_id;
 }
 
-// Component destructor
+// Component destructor: no need to free the value pointed by S and Ne
+// as they are beeing freed by the lsm
 void free_component(component *c){
     free(c->keys);
     free(c->values);
@@ -56,7 +57,7 @@ void free_component(component *c){
 
 // Allocate and set filename to 'name/component_typecomponent_id.data'
 char* get_files_name(char *name, char* component_id, char* component_type){
-    char *filename = (char *) malloc(8*sizeof(char) + sizeof(component_id) + sizeof(name));
+    char *filename = (char *) calloc(FILENAME_SIZE + 8,sizeof(char));
     sprintf(filename, "%s/%s%s.data", name, component_type, component_id);
 
     return filename;
@@ -64,16 +65,20 @@ char* get_files_name(char *name, char* component_id, char* component_type){
 
 // Create on disk the files for the disk component
 void create_disk_component(char* name, int Nc){
+    char *filename_keys, *filename_values;
     // Arbitrary size big enough
     char* component_id = (char*) malloc(16*sizeof(char));
     for (int i=1; i<Nc; i++){
         // Building filename
         sprintf(component_id,"C%d", i);
-        char *filename_keys = get_files_name(name, component_id, "k");
-        char *filename_values = get_files_name(name, component_id, "v");
+        filename_keys = get_files_name(name, component_id, "k");
+        filename_values = get_files_name(name, component_id, "v");
         fopen(filename_keys, "wb");
         fopen(filename_values, "wb");
+        free(filename_keys);
+        free(filename_values);
     }
+    free(component_id);
 
 }
 
@@ -82,7 +87,7 @@ void create_disk_component(char* name, int Nc){
 // TODO: Make a generic constructor of lsm object
 // (possible once the linked lists have been set up)
 void init_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size){
-    lsm->name = (char*)malloc(sizeof(name));
+    lsm->name = (char*)calloc(FILENAME_SIZE, sizeof(char));
     strcpy(lsm->name, name);
     lsm->buffer = (component *) malloc(sizeof(component));
     lsm->C0 = (component *) malloc(sizeof(component));
@@ -156,6 +161,9 @@ void read_disk_component(component* C, char *name, int* Ne, char *component_id,
         //for (int i=0; i<20; i++) printf("%ld\n", C[i]);
         fclose(fvalues);
     }
+
+    free(filename_keys);
+    free(filename_values);
 }
 
 void write_disk_component(component *pC, char *name, int value_size){
@@ -172,6 +180,9 @@ void write_disk_component(component *pC, char *name, int value_size){
     FILE *fvalues = fopen(filename_values, "wb");
     fwrite(pC->values, value_size*sizeof(char), *(pC->Ne), fvalues);
     fclose(fvalues);
+
+    free(filename_keys);
+    free(filename_values);
 }
 
 // Function to write lsm tree to disk
@@ -182,7 +193,7 @@ void write_lsm_to_disk(LSM_tree *lsm){
     write_disk_component(lsm->buffer, lsm->name, VALUE_SIZE);
 
     // Save metadata of the lsm to disk in file name.data
-    char *filename = (char*) malloc(16*sizeof(char) + sizeof(lsm->name));
+    char *filename = (char*) calloc(56, sizeof(char));
     sprintf(filename,"%s/meta.data", lsm->name);
     FILE* fout = fopen(filename, "wb");
     fwrite(lsm->name, sizeof(lsm->name), 1, fout);
@@ -192,13 +203,14 @@ void write_lsm_to_disk(LSM_tree *lsm){
     fwrite(lsm->Cs_size, sizeof(int), lsm->Nc+2, fout);
 
     fclose(fout);
+    free(filename);
 }
 
 // Try to read lsm from disk in its repository: name
 void read_lsm_from_disk(LSM_tree *lsm, char *name){
     // Initialize lsm if needed
     if (lsm == NULL) lsm = (LSM_tree*) malloc(sizeof(LSM_tree));
-    lsm->name = (char *) malloc(sizeof(name));
+    lsm->name = (char*)calloc(FILENAME_SIZE, sizeof(char));
     lsm->C0 = (component *) malloc(sizeof(component));
     lsm->buffer = (component *) malloc(sizeof(component));
 
@@ -217,6 +229,7 @@ void read_lsm_from_disk(LSM_tree *lsm, char *name){
     fread(lsm->Cs_size, sizeof(int), lsm->Nc + 2, fin);
 
     fclose(fin);
+    free(filename);
 
     // Read memory components from disk
     init_component(lsm->C0, lsm->Cs_size, VALUE_SIZE, lsm->Cs_Ne, "C0");
@@ -405,6 +418,7 @@ void component_search(component *pC, int key, int* index, char* value){
 // Read value of key in LSMTree lsm
 // return NULL if key not present
 char* read_lsm(LSM_tree *lsm, int key){
+    int j;
     int* index = (int*) malloc(sizeof(int));
     char* value_output = (char*) malloc(VALUE_SIZE*sizeof(char));
     // Linear scan in C0
@@ -413,6 +427,7 @@ char* read_lsm(LSM_tree *lsm, int key){
         if (lsm->C0->keys[i] == key){
             printf("Found in C0\n");
             strcpy(value_output, lsm->C0->values + i*VALUE_SIZE);
+            free(index);
             return value_output;
         }
     }
@@ -420,26 +435,31 @@ char* read_lsm(LSM_tree *lsm, int key){
     // Binary search over disk components (buffer and disk components) 
     char * component_id = (char*) malloc(8*sizeof(char));
     component* pC = lsm->buffer;
-    for (int i=1; i<lsm->Nc+1; i++){
-        if (lsm->Cs_Ne[i] > 0){
+    for (j=1; j<lsm->Nc+1; j++){
+        if (lsm->Cs_Ne[j] > 0){
             // Case disk component
-            if (i != 1){
-                sprintf(component_id, "C%d", i-1);
-                read_disk_component(pC, lsm->name, lsm->Cs_Ne + i,
-                                    component_id, lsm->Cs_size + i,
+            if (j != 1){
+                sprintf(component_id, "C%d", j-1);
+                read_disk_component(pC, lsm->name, lsm->Cs_Ne + j,
+                                    component_id, lsm->Cs_size + j,
                                     VALUE_SIZE);
             }
             printf("Reading %s\n", pC->component_id);
             component_search(pC, key, index, value_output);
             if (*index != -1){
                 printf("Found in %s\n", pC->component_id);
+                free(index);
+                // Case disk component
+                if (j>1) free_component(pC);
                 return value_output;
             }
         }
         // Initializing the component pointer for disk component
-        if (i==1) pC = (component *) malloc(sizeof(component));
+        if (j==1) pC = (component *) malloc(sizeof(component));
     }
+    if (j>2) free_component(pC);
     free(value_output);
+    free(index);
     return NULL;
 }
 
@@ -571,12 +591,14 @@ int main(){
         value_read = read_lsm(&lsm, targets[i]);
         if (value_read != NULL) printf("Reading key: %d; value found: %s\n", targets[i], value_read);
         else printf("Reading key: %d; key not found:\n", targets[i]);
+        free(value_read);
     } 
 
     // Writing to disk
     write_lsm_to_disk(&lsm);
 
     // Free memory
+    free(comp_id);
     // TOFIX: buggy
     //free_lsm(&lsm);
 }
