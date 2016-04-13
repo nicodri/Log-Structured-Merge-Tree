@@ -51,38 +51,65 @@ void merge_with_values(int* keys, char* values, int down, int middle, int top,
 // keys and values (corresponds to the next component)
 // Tested: ok
 void merge_components(int* keys1, int* keys2, char* values1, char* values2,
-                      int size1, int size2, int value_size){
+                      int* size1, int* size2, int value_size){
     // Temporary files with a copy of keys2 and values2 because
     // both files are modified inplace
-    int* keys2_temp = (int *) malloc(size2 * sizeof(int));
-    for (int i=0; i<size2; i++) keys2_temp[i] = keys2[i];
-    char* values2_temp = (char *) malloc(value_size * size2 * sizeof(char));
-    for (int i=0; i<size2; i++) strcpy(values2_temp + i*value_size,
+    int* keys2_temp = (int *) malloc((*size2) * sizeof(int));
+    for (int i=0; i<(*size2); i++) keys2_temp[i] = keys2[i];
+    char* values2_temp = (char *) malloc(value_size * (*size2) * sizeof(char));
+    for (int i=0; i<(*size2); i++) strcpy(values2_temp + i*value_size,
                                        values2 + i*value_size);
 
     // Going through the sublists
     int ileft = 0;
     int iright = 0;
     int i = 0;
-    while ((ileft < size1) && (iright < size2)){
+    while ((ileft < (*size1)) && (iright < (*size2))){
         // Filling from keys2_temp
         if (keys1[ileft] > keys2_temp[iright]){
             keys2[i] = keys2_temp[iright];
-            strcpy(values2 + i*value_size, values2_temp + (iright++)*value_size);
+            strcpy(values2 + (i++)*value_size,
+                   values2_temp + (iright++)*value_size);
         }
         // Filling from keys1
-        else{
+        else if (keys1[ileft] < keys2_temp[iright]){
             keys2[i] = keys1[ileft];
-            strcpy(values2 + i*value_size, values1 + (ileft++)*value_size);
+            strcpy(values2 + (i++)*value_size, values1 + (ileft++)*value_size);
         }
-        i++;
+        // Case with equality (when updates/delete operation)
+        else{
+            // Update case
+            // TOFIX: list will contain holes at the end
+            if (*(values1 + (ileft)*value_size) != '!'){
+                printf("DEBUG: Update case\n");
+                printf("On key: %d\n", keys1[ileft]);
+                printf("Value left: %s \n", values1 + (ileft)*value_size);
+                printf("Right key: %d\n", keys2[iright]);
+                printf("Value right: %s \n", values2_temp + (iright)*value_size);
+                keys2[i] = keys2_temp[ileft];
+                strcpy(values2 + (i++)*value_size,
+                       values1 + (ileft++)*value_size);
+                iright++;
+                // Update number of elements
+                *size1 = *size1 - 1;
+            }
+            // Delete case
+            else{
+                printf("DEBUG: Delete case\n");
+                ileft++;
+                iright++;
+                // Update number of elements
+                *size1 = *size1 - 1;
+                *size2 = *size2 - 1;
+            }
+        }
     }
     // Finishing the filling
-    while (ileft < size1){
+    while (ileft < (*size1)){
         keys2[i] = keys1[ileft];
         strcpy(values2 + (i++)*value_size, values1 + (ileft++)*value_size);
     }
-    while (iright < size2){
+    while (iright < (*size2)){
         keys2[i] = keys2_temp[iright];
         strcpy(values2 + (i++)*value_size, values2_temp + (iright++)*value_size);
     }
