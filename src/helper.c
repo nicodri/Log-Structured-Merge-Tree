@@ -1,7 +1,23 @@
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include "LSMTree.h"
+
+// Allocate and set filename to 'name/component_typecomponent_id.data'
+char* get_files_name(char *name, char* component_id, char* component_type,
+                     int filename_size){
+    char *filename = (char *) calloc(filename_size + 8,sizeof(char));
+    sprintf(filename, "%s/%s%s.data", name, component_type, component_id);
+
+    return filename;
+}
+
+// Binary search of key inside sorted integer array keys[down,..,top]
+// return global index in keys if found else -1
+int binary_search(int* keys, int key, int down, int top){
+    if (top < down) return -1;
+    int middle = (top + down)/2;
+    if (keys[middle] < key) return binary_search(keys, key, middle+1, top);
+    if (keys[middle] > key) return binary_search(keys, key, down, middle-1);
+    return middle;
+}
 
 void merge_with_values(int* keys, char* values, int down, int middle, int top,
                        int value_size){
