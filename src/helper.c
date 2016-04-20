@@ -1,12 +1,11 @@
 #include "LSMTree.h"
 
 // Allocate and set filename to 'name/component_typecomponent_id.data'
-char* get_files_name(char *name, char* component_id, char* component_type,
+void get_files_name(char *filename, char *name, char* component_id, char* component_type,
                      int filename_size){
-    char *filename = (char *) calloc(filename_size + 8,sizeof(char));
-    sprintf(filename, "%s/%s%s.data", name, component_type, component_id);
-
-    return filename;
+    // Check if memory was allocated
+    if (filename == NULL) filename = (char *) calloc(filename_size + 8,sizeof(char));
+    sprintf(filename, "%s/%c%s.data", name, *component_type, component_id);
 }
 
 // Binary search of key inside sorted integer array keys[down,..,top]
@@ -17,6 +16,16 @@ int binary_search(int* keys, int key, int down, int top){
     if (keys[middle] < key) return binary_search(keys, key, middle+1, top);
     if (keys[middle] > key) return binary_search(keys, key, down, middle-1);
     return middle;
+}
+
+// Linear search of key in (unsorted) keys. Set index to the position if found
+void keys_linear_search(int* index, int key, int* keys, int Ne){
+    *index = -1;
+    for (int i=0; i < Ne; i++){
+        if (keys[i] == key){
+            *index = i;
+        }
+    }
 }
 
 void merge_with_values(int* keys, char* values, int down, int middle, int top,
@@ -66,7 +75,7 @@ void merge_with_values(int* keys, char* values, int down, int middle, int top,
 // values list in the array of values; the results are set in the second list of
 // keys and values (corresponds to the next component)
 // Tested: ok
-void merge_components(int* keys1, int* keys2, char* values1, char* values2,
+void merge_list(int* keys1, int* keys2, char* values1, char* values2,
                       int* size1, int* size2, int value_size){
     // Temporary files with a copy of keys2 and values2 because
     // both files are modified inplace
@@ -80,6 +89,7 @@ void merge_components(int* keys1, int* keys2, char* values1, char* values2,
     int ileft = 0;
     int iright = 0;
     int i = 0;
+    int number_merges=0; // Count updates/deletes
     while ((ileft < (*size1)) && (iright < (*size2))){
         // Filling from keys2_temp
         if (keys1[ileft] > keys2_temp[iright]){
@@ -94,33 +104,23 @@ void merge_components(int* keys1, int* keys2, char* values1, char* values2,
         }
         // Case with equality (when updates/delete operation)
         else{
-            // Update case
-            // TOFIX: list will contain holes at the end
-            if (*(values1 + (ileft)*value_size) != '!'){
-                printf("DEBUG: Update case\n");
-                printf("On key: %d\n", keys1[ileft]);
-                printf("Value left: %s \n", values1 + (ileft)*value_size);
-                printf("Right key: %d\n", keys2[iright]);
-                printf("Value right: %s \n", values2_temp + (iright)*value_size);
-                keys2[i] = keys2_temp[ileft];
-                strcpy(values2 + (i++)*value_size,
-                       values1 + (ileft++)*value_size);
-                iright++;
-                // Update number of elements
-                *size1 = *size1 - 1;
-            }
-            // Delete case
-            else{
-                printf("DEBUG: Delete case\n");
-                ileft++;
-                iright++;
-                // Update number of elements
-                *size1 = *size1 - 1;
-                *size2 = *size2 - 1;
-            }
+            // Same behavior for updates/delets, we keep the most recent one (upper)
+            // printf("DEBUG: Update/delete case\n");
+            // printf("On key: %d\n", keys1[ileft]);
+            // printf("Value left: %s \n", values1 + (ileft)*value_size);
+            // printf("Right key: %d\n", keys2[iright]);
+            // printf("Value right: %s \n", values2_temp + (iright)*value_size);
+            keys2[i] = keys1[ileft];
+            strcpy(values2 + (i++)*value_size,
+                   values1 + (ileft++)*value_size);
+            iright++;
+            number_merges++;
         }
     }
-    // Finishing the filling
+    // Update number of elements
+    *size2 = *size2 - number_merges;
+
+    // Finishing to fill
     while (ileft < (*size1)){
         keys2[i] = keys1[ileft];
         strcpy(values2 + (i++)*value_size, values1 + (ileft++)*value_size);
@@ -149,86 +149,3 @@ void merge_sort_with_values(int* keys, char* values, int down, int top, int valu
         merge_with_values(keys, values, down, middle, top, value_size);
     }
 }
-
-// Testing merge_sort
-// int main(){
-//     int value_size = 16;
-//     // Keys
-//     int size = 1000;
-//     int *keys = (int *) malloc(size * sizeof(int));
-//     for (int i=0; i<size/2; i++) keys[i] = 2*i;
-//     for (int i=size/2; i<size; i++) keys[i] = 2*(i-size/2) + 1;
-
-//     // Values
-//     char* values = (char *) malloc(size*value_size*sizeof(char));
-//     char* value = (char *) malloc(value_size);
-//     for (int i=0; i<size/2; i++){
-//         // Filling value
-//         sprintf(value, "hello%d", (2*i)%150);
-//         strcpy(values + i*value_size, value);
-//     }
-//     for (int i=size/2; i<size; i++){
-//         // Filling value
-//         sprintf(value, "hello%d", (2*(i-size/2) + 1)%150);
-//         strcpy(values + i*value_size, value);
-//     }
-//     printf("Keys before Merge\n");
-//     for (int i = 0; i<size; i++) printf("%d\n", keys[i]);
-
-//     printf("Values before Merge\n");
-//     for (int i = 0; i<size; i++) printf("%s\n", values + i*value_size);
-
-//     merge_sort_with_values(keys, values, 0, size-1, value_size);
-
-//     printf("Keys after Merge\n");
-//     for (int i = 0; i<size; i++) printf("%d\n", keys[i]);
-
-//     printf("Values after Merge\n");
-//     for (int i = 0; i<size; i++) printf("%s\n", values + i*value_size);
-
-
-// }
-
-// Testing merge_component
-// int main(){
-//     int value_size = 16;
-//     // Keys1
-//     int size1 = 1000;
-//     int *keys1 = (int *) malloc(size1 * sizeof(int));
-//     for (int i=0; i<size1; i++) keys1[i] = 2*i;
-
-//     int size2 = 1000;
-//     int *keys2 = (int *) malloc((size2 + size1) * sizeof(int));
-//     for (int i=0; i<size2; i++) keys2[i] = 2*i + 1;
-
-//     // Values1
-//     char* values1 = (char *) malloc(size1*value_size*sizeof(char));
-//     char* value = (char *) malloc(value_size);
-//     for (int i=0; i < size1; i++){
-//         // Filling value
-//         sprintf(value, "hello%d", (2*i)%150);
-//         strcpy(values1 + i*value_size, value);
-//     }
-
-//     // Values2
-//     char* values2 = (char *) malloc((size1+size2)*value_size*sizeof(char));
-//     for (int i=0; i < size1; i++){
-//         // Filling value
-//         sprintf(value, "hello%d", (2*i+1)%150);
-//         strcpy(values2 + i*value_size, value);
-//     }
-
-//     printf("Keys before Merge\n");
-//     for (int i = 0; i<10; i++) printf("%d\n", keys2[i]);
-
-//     printf("Values before Merge\n");
-//     for (int i = 0; i<10; i++) printf("%s\n", values2 + i*value_size);
-
-//     merge_components(keys1, keys2, values1, values2, size1, size2, value_size);
-
-//     printf("Last Keys after Merge\n");
-//     for (int i = (size1 + size2)-10; i<(size1 + size2); i++) printf("%d\n", keys2[i]);
-
-//     printf("Last Values after Merge\n");
-//     for (int i = (size1 + size2)-10; i<(size1 + size2); i++) printf("%s\n", values2 + i*value_size);
-// }

@@ -1,18 +1,30 @@
 #include "LSMtree.h"
 
-// allocate memory for lsm struct
-// TODO: need to chck the validity of arguments (length of Cs_size ...)
-// TODO: Make a generic constructor of lsm object
-// (possible once the linked lists have been set up)
-void init_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size,
-              int filename_size){
+// Init first elements of an LSM_tree:
+//  - name
+//  - buffer
+//  - C0
+//  - filename_size (size of name)
+//  - Ne (initliazed to 0)
+void init_lsm(LSM_tree *lsm, char* name, int filename_size){
     lsm->name = (char*)calloc(filename_size, sizeof(char));
     strcpy(lsm->name, name);
     lsm->buffer = (component *) malloc(sizeof(component));
     lsm->C0 = (component *) malloc(sizeof(component));
-    lsm->value_size = value_size;
     lsm->filename_size = filename_size;
+    lsm->Ne = 0;
+
+}
+
+// Create LSM Tree with a fixed number of component Nc without
+// initialization of the components (on memory & on disk)
+void create_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size,
+              int filename_size){
+    // Init struct lsm
+    init_lsm(lsm, name, filename_size);
+
     // List contains Nc+2 elements: [C0, buffer, C1, C2,...]
+    lsm->value_size = value_size;
     lsm->Cs_size = (int *) malloc((Nc+2)*sizeof(int));
     lsm->Cs_Ne = (int *) malloc((Nc+2)*sizeof(int));
     lsm->Nc = Nc;
@@ -35,17 +47,30 @@ void free_lsm(LSM_tree *lsm){
     free(lsm);
 }
 
-// Initialize LSM_tree object with metadata and C0
-// name need to be at most 7 car int
-// TODO: check the validity of the args (ratios, Csize)
+// Create LSM Tree with a fixed number of component Nc with
+// initialization of the components on memory & on disk (create
+// the files inside the folder, with a cleaning if needed).
+// Check if folder exists and clean it if needed.
+// TODO: check the validity of the args
 void build_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size,
                int filename_size){
-    // allocate memory for lsm tree
-    init_lsm(lsm, name, Nc, Cs_size, value_size, filename_size);
+    // Allocate memory and create lsm
+    create_lsm(lsm, name, Nc, Cs_size, value_size, filename_size);
 
-    // Initialize C0 and buffer
+    // Initialize C0 and buffer (on memory)
     init_component(lsm->C0, Cs_size, value_size, lsm->Cs_Ne, "C0");
     init_component(lsm->buffer, Cs_size + 1, value_size, lsm->Cs_Ne + 1,  "buffer");
+
+    // Check if folder exists
+    if (access(name, F_OK) == -1){
+        printf("ERROR: folder name %s not present\n", name);
+        return;
+    }
+    // Clean the folder: error printed if already cleaned
+    char command[50];
+    sprintf(command, "exec rm -rf %s/*", name);
+    system(command);
+    //free(command);
 
     // Initialize on disk the disk components
     create_disk_component(name, Nc, filename_size);
@@ -82,11 +107,8 @@ void write_lsm_to_disk(LSM_tree *lsm){
 
 // Try to read lsm from disk in its repository: name
 void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size){
-    // Initialize lsm if needed
-    if (lsm == NULL) lsm = (LSM_tree*) malloc(sizeof(LSM_tree));
-    lsm->name = (char*)calloc(filename_size, sizeof(char));
-    lsm->C0 = (component *) malloc(sizeof(component));
-    lsm->buffer = (component *) malloc(sizeof(component));
+    // Init struct lsm
+    init_lsm(lsm, name, filename_size);
 
     // Read meta.data
     char *filename = (char*) malloc(16*sizeof(char) + sizeof(name));
@@ -94,7 +116,6 @@ void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size){
     FILE* fin = fopen(filename, "rb");
     fread(lsm->name, sizeof(name), 1, fin);
     // TODO: assertion on name
-    // TODO: int allocation
     fread(&lsm->Ne, sizeof(int), 1, fin);
     fread(&lsm->Nc, sizeof(int), 1, fin);
     fread(&lsm->value_size, sizeof(int), 1, fin);
@@ -114,47 +135,31 @@ void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size){
 }
 
 // Append (k,v) to the lsm tree
+// TOTEST: append_on_disk
+// TODO: efficient log which saves the state of the LSM-tree
 void append_lsm(LSM_tree *lsm, int key, char *value){
     // TODO: check validity of the args (size of the value, ...)
 
-    // Append to C0
+    // Before on disk than on memory (for log purpose in cash of crash)
+    // Append to C0 on disk
+    //append_on_disk(lsm->C0, key, value, lsm->name, lsm->value_size, lsm->filename_size);
+
+    // Append to C0 on memory
     lsm->C0->keys[lsm->Cs_Ne[0]] = key;
     strcpy(lsm->C0->values + lsm->Cs_Ne[0]*lsm->value_size, value);
-    // TOFIX Writing on disk: just need to append to the C0 file
-    // this instruction copies the whole component
-    // write_disk_component(lsm->C0, lsm->name, VALUE_SIZE);
 
     //Increment number of elements
     lsm->Ne++;
     lsm->Cs_Ne[0]++;
 
-    // Merging operations
+    // MERGING OPERATIONS
     
     // Check if C0 is full
     if (lsm->Cs_Ne[0] >= lsm->Cs_size[0]){
-        // Step 1
-        // Sorting C0
         // Inplace sorting of C0->keys and corresponding reorder in C0->values
         merge_sort_with_values(lsm->C0->keys, lsm->C0->values, 0,
                                lsm->Cs_size[0]-1, lsm->value_size);
-        // Case empty buffer
-        if (lsm->buffer->Ne == 0){
-            swap_component_pointer(lsm->C0, lsm->buffer, lsm->value_size);
-        }
-        else{
-            // We don't free the memory in C0, we just update the number of
-            // elements in it.
-            merge_components(lsm->C0->keys, lsm->buffer->keys, lsm->C0->values,
-                             lsm->buffer->values, lsm->C0->Ne, lsm->buffer->Ne,
-                             lsm->value_size);
-        }
-        // Updates number of elements
-        lsm->Cs_Ne[1] += lsm->Cs_Ne[0];
-        lsm->Cs_Ne[0] = 0;
-
-        // Updating log on disk
-        write_disk_component(lsm->C0, lsm->name, lsm->value_size, lsm->filename_size);
-        write_disk_component(lsm->buffer, lsm->name, lsm->value_size, lsm->filename_size);
+        merge_components(lsm->buffer, lsm->C0, lsm->name, lsm->value_size, lsm->filename_size);
     }
 
     // Step 2: iterative over all the full components
@@ -165,52 +170,23 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
 
     // Check if current component is full
     while (lsm->Cs_Ne[current_C_index] >= lsm->Cs_size[current_C_index]){
-        // Initialize next component
+        // Initialize and read next component
         component* next_component = (component *) malloc(sizeof(component));
-
-        // Read next component from disk
         sprintf(component_id, "C%d", current_C_index);
         read_disk_component(next_component, lsm->name,
                             lsm->Cs_Ne + (current_C_index+1),
                             component_id,lsm->Cs_size + (current_C_index+1),
                             lsm->value_size, lsm->filename_size);
-        // Debug
-        // printf("Before Merging\n");
-        // printf("Ne in next Component: %d\n", *(next_component->Ne));
-        if (next_component->Ne == 0){
-            swap_component_pointer(current_component, next_component, lsm->value_size);
-        }
-        else{
-            // We don't free the memory in prev component,
-            // we just update the number of elements in it.
-            merge_components(current_component->keys, next_component->keys,
-                             current_component->values, next_component->values,
-                             current_component->Ne, next_component->Ne,
-                             lsm->value_size);
-        }
-        // Updates number of elements
-        lsm->Cs_Ne[current_C_index + 1] += lsm->Cs_Ne[current_C_index];
-        lsm->Cs_Ne[current_C_index] = 0;
-
-        // Write the component to disk
-        // TODO: write also done for the buffer (need to do it as a log)
-        write_disk_component(next_component, lsm->name, lsm->value_size, lsm->filename_size);
-        write_disk_component(current_component, lsm->name, lsm->value_size, lsm->filename_size);
+        merge_components(next_component, current_component, lsm->name, lsm->value_size, lsm->filename_size);
 
         // Updates component
         if (current_C_index > 1){
             free_component(current_component);
-            //current_component = (component *) malloc(sizeof(component));
         }
         current_C_index++;
         current_component = next_component;
-        // TOFIX: Issue with buffer (because the next line does not change the pointer
-        // outside the function)
-        // free(current_component->keys);
-        // free(current_component->values);
-        // Make current component point to next_component
-        
     }
+    // To avoiding freeing the buffer
     if (current_C_index >1 ) free_component(current_component);
     free(component_id);
 }
@@ -218,66 +194,55 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
 // Read value of key in LSMTree lsm
 // return NULL if key not present
 char* read_lsm(LSM_tree *lsm, int key){
-    int j = 0;
-    // TO check the status: -2 deleted, -1 not found else found
-    int* index = (int*) malloc(sizeof(int));
-    // Initialization
-    *index = -1;
+    // Memory allocation
+    int* index = (int*) malloc(sizeof(int)); // -1 not found else found
     char* value_output = (char*) malloc(lsm->value_size*sizeof(char));
-    // Linear scan in C0
-    if (VERBOSE == 1) printf("Reading C0\n");
-    for (int i=0; i < lsm->Cs_Ne[0]; i++){
-        if (lsm->C0->keys[i] == key){
-            // Check that's not a deleted key
-            if (*(lsm->C0->values + i*lsm->value_size) == '!'){
-                *index = -2;
-                break;
-            } 
-            if (VERBOSE == 1) printf("Found in C0\n");
-            strcpy(value_output, lsm->C0->values + i*lsm->value_size);
-            *index = 1;
+
+    // Linear scan in C0 (initialize index to -1)
+    keys_linear_search(index, key, lsm->C0->keys, lsm->Cs_Ne[0]);
+    if (*index != -1){
+        if (VERBOSE == 1) printf("Key found in C0\n");
+        strcpy(value_output, lsm->C0->values + (*index)*lsm->value_size);
+    }
+
+    // Reading buffer
+    // Checking extreme of the buffer
+    if ((*index == -1) && (key >= lsm->buffer->keys[0]) && (key <= lsm->buffer->keys[lsm->Cs_Ne[1]-1])){
+        *index = binary_search(lsm->buffer->keys, key, 0, lsm->Cs_Ne[1]-1);
+        if (*index != -1){
+            if (VERBOSE == 1) printf("Key found in %s\n", lsm->buffer->component_id);
+            strcpy(value_output, lsm->buffer->values + (*index)*lsm->value_size);
         }
     }
 
-    // Binary search over disk components (buffer and disk components) 
-    component* pC;
+    // Binary search over disk components
     if (*index == -1){
+        char* filename_keys = (char *) calloc(lsm->filename_size + 8,sizeof(char));
         char * component_id = (char*) malloc(8*sizeof(char));
-        pC = lsm->buffer;
-        for (j=1; j<lsm->Nc+1; j++){
+
+        // Starting with C1 (indexed at 2 in Cs_Ne)
+        for (int j=2; j<lsm->Nc+1; j++){
             if (lsm->Cs_Ne[j] > 0){
-                // Case disk component: need to read the component from disk
-                if (j != 1){
-                    sprintf(component_id, "C%d", j-1);
-                    read_disk_component(pC, lsm->name, lsm->Cs_Ne + j,
-                                        component_id, lsm->Cs_size + j,
-                                        lsm->value_size, lsm->filename_size);
-                }
-                if (VERBOSE == 1) printf("Reading %s\n", pC->component_id);
-                component_search(pC, key, index, value_output, lsm->value_size);
+                // Build filename of the keys
+                sprintf(component_id, "C%d", j-1);
+                get_files_name(filename_keys, lsm->name, component_id, "k", lsm->filename_size);
+                // Searching in component
+                component_search(index, key, lsm->Cs_Ne[j], filename_keys);
+
                 // Key found (can still be deleted)
                 if (*index != -1){
-                    if (VERBOSE == 1) printf("Key Found in %s\n", pC->component_id);
-                    // Case disk component
-                    if (j>1) free_component(pC);
+                    if (VERBOSE == 1) printf("Key Found in %s\n", component_id);
+                    read_value(value_output, *index, lsm->name, component_id, 
+                               lsm->value_size, lsm->filename_size);
                     break;
                 }
-                // Free and reinitialize component for the next search
-                if (j>1) {
-                    free_component(pC);
-                    pC = (component *) malloc(sizeof(component));
-                }
             }
-            // Initializing the component pointer for the first disk component
-            if (j==1) pC = (component *) malloc(sizeof(component));
         }
+        free(filename_keys);
         free(component_id);
     }
-    // Check needed not to free the buffer 
-    if ((j >= 2) && (*index < 0)){
-        free(pC);
-    }
-    if (*index >= 0){
+    // Check if key found and not previously deleted
+    if ((*index >= 0) && (*(value_output) != '!')){
         free(index);
         return value_output;
     }
@@ -294,12 +259,12 @@ char* read_lsm(LSM_tree *lsm, int key){
 void update_lsm(LSM_tree *lsm, int key, char *value){
     // TODO: add bloom filter check
     // Linear scan of C0
-    for (int i=0; i < lsm->Cs_Ne[0]; i++){
-        if (lsm->C0->keys[i] == key){
-            // Update the value for key i
-            strcpy(lsm->C0->values + i*lsm->value_size, value);
-            return ;
-        }
+    int* index = (int*) malloc(sizeof(int));
+    keys_linear_search(index, key, lsm->C0->keys, lsm->Cs_Ne[0]);
+    if (*index != -1){
+        // Update the value for key index
+        strcpy(lsm->C0->values + (*index)*lsm->value_size, value);
+        return ;
     }
     // Append the update
     // TODO: correct update of the number of elements in the lsm tree
@@ -307,33 +272,11 @@ void update_lsm(LSM_tree *lsm, int key, char *value){
     append_lsm(lsm, key, value);
 }
 
-// Delete (key, value) to the lsm tree: idea is to scan linearly
-// C0 and update directly (old_k,v) if found, else append it; the
-// update will occur when merging (merge keep always the key in the
-// smallest component)
+// Delete (key, value) to the lsm tree: 
 void delete_lsm(LSM_tree *lsm, int key){
-    // TODO: add bloom filter check
-    // Linear scan of C0
-    for (int i=0; i < lsm->Cs_Ne[0]; i++){
-        if (lsm->C0->keys[i] == key){
-            // check that key is not the last one
-            if (i != lsm->Cs_Ne[0] - 1){
-                // Switch the (k,v) tuple found with the last one appended
-                lsm->C0->keys[i] = lsm->C0->keys[lsm->Cs_Ne[0] - 1];
-                strcpy(lsm->C0->values + i*lsm->value_size,
-                       lsm->C0->values + (lsm->Cs_Ne[0] - 1)*lsm->value_size);
-            }
-            // Update the count
-            lsm->Cs_Ne[0]--;
-            lsm->Ne--;
-            return ;
-        }
-    }
-    // Append the deletion (identified with the value: )
-    // TODO: correct update of the number of elements in the lsm tree
     char* deletion = (char*) malloc(lsm->value_size*sizeof(char));
-    sprintf(deletion, "!");
-    append_lsm(lsm, key, deletion);
+    sprintf(deletion, TOMBSTONE);
+    update_lsm(lsm, key, deletion);
 }
 
 // Print number of element in the tree

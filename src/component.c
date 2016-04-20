@@ -23,19 +23,20 @@ void free_component(component *c){
 
 // Create on disk the files for the disk component
 void create_disk_component(char* name, int Nc, int filename_size){
-    char *filename_keys, *filename_values;
+    char *filename = (char *) calloc(filename_size + 8,sizeof(char));
     // Arbitrary size big enough
     char* component_id = (char*) malloc(16*sizeof(char));
+    char component_type[] = {'k','v'};
     for (int i=1; i<Nc; i++){
-        // Building filename
         sprintf(component_id,"C%d", i);
-        filename_keys = get_files_name(name, component_id, "k", filename_size);
-        filename_values = get_files_name(name, component_id, "v", filename_size);
-        fopen(filename_keys, "wb");
-        fopen(filename_values, "wb");
-        free(filename_keys);
-        free(filename_values);
+        for (int k=0; k<2; k++){
+            // Building filename
+            get_files_name(filename, name, component_id, &component_type[k], filename_size);
+            fopen(filename, "wb");
+        }
     }
+    // Free memory
+    free(filename);
     free(component_id);
 }
 
@@ -45,8 +46,10 @@ void read_disk_component(component* C, char *name, int* Ne, char *component_id,
     // Initialize component
     init_component(C, component_size, value_size, Ne, component_id);
     // Building filename
-    char *filename_keys = get_files_name(name, component_id, "k", filename_size);
-    char *filename_values = get_files_name(name, component_id, "v", filename_size);
+    char *filename_keys = (char *) calloc(filename_size + 8,sizeof(char));
+    char *filename_values = (char *) calloc(filename_size + 8,sizeof(char));
+    get_files_name(filename_keys, name, component_id, "k", filename_size);
+    get_files_name(filename_values, name, component_id, "v", filename_size);
 
     // Reading files
     FILE *fkeys;
@@ -72,10 +75,14 @@ void read_disk_component(component* C, char *name, int* Ne, char *component_id,
     free(filename_values);
 }
 
+
+// Write on disk the keys and values of the component pC
 void write_disk_component(component *pC, char *name, int value_size, int filename_size){
     // Building filename
-    char *filename_keys = get_files_name(name, pC->component_id, "k", filename_size);
-    char *filename_values = get_files_name(name, pC->component_id, "v", filename_size);
+    char *filename_keys = (char *) calloc(filename_size + 8,sizeof(char));
+    char *filename_values = (char *) calloc(filename_size + 8,sizeof(char));
+    get_files_name(filename_keys, name, pC->component_id, "k", filename_size);
+    get_files_name(filename_values, name, pC->component_id, "v", filename_size);
 
     // Write keys
     FILE *fkeys = fopen(filename_keys, "wb");
@@ -91,7 +98,41 @@ void write_disk_component(component *pC, char *name, int value_size, int filenam
     free(filename_values);
 }
 
-// TODO: create external function to apply on both keys and values
+void append_on_disk(component * C, int key, char* value, char* name, int value_size,
+                    int filename_size){
+    char *filename = (char *) calloc(filename_size + 8,sizeof(char));
+    FILE* fd;
+    // Write key
+    get_files_name(filename, name, C->component_id, "k", filename_size);
+    fd = fopen(filename, "ab");
+    fwrite(&key, sizeof(int), 1, fd);
+    fclose(fd);
+    // Write value
+    get_files_name(filename, name, C->component_id, "v", filename_size);
+    fd = fopen(filename, "ab");
+    fwrite(value, sizeof(int), value_size, fd);
+    fclose(fd);
+}
+
+// Read value at given index in the component on disk
+void read_value(char* value, int index, char* name, char* component_id, int value_size,
+                int filename_size){
+    if (value == NULL) value = (char*) malloc(value_size*sizeof(char));
+    char* filename = (char *) calloc(filename_size + 8,sizeof(char));
+    // Reading the found value at the corresponding index
+    get_files_name(filename, name, component_id, "v",
+                   filename_size);
+
+    FILE* fd = fopen(filename, "rb");
+    if (fd == NULL){
+        perror("fopen");
+    }
+    fseek(fd, index*value_size*sizeof(char), SEEK_SET);
+    fread(value, value_size, 1, fd);
+    fclose(fd);
+}
+
+// TOFIX: code redundancy BUT hard to divide into 2 functions because different type
 // Swap the pointer to keys and values between the two components
 // Assumes next_component->S > current_component->S
 void swap_component_pointer(component *current_component, component *next_component,
@@ -107,9 +148,7 @@ void swap_component_pointer(component *current_component, component *next_compon
     current_component->values = tempv;
 
     // Reallocate memory
-    // keys
-    // TOFIX: we assume that size of C0 is lower than size of buffer
-    // realloc cant raise an error on C0
+    // KEYS
     realloc(current_component->keys, *(current_component->S) * sizeof(int));
     int *tmpk = realloc(next_component->keys, *(next_component->S) * sizeof(int));
     if (tmpk == NULL)
@@ -125,9 +164,7 @@ void swap_component_pointer(component *current_component, component *next_compon
         next_component->keys = tmpk;
     }
 
-    // values
-    // TOFIX: we assume that size of C0 is lower than size of buffer
-    // realloc cant raise an error on C0
+    // VALUES
     realloc(current_component->values, value_size * *(current_component->S) * sizeof(char));
     char *tmpv = realloc(next_component->values, value_size * *(next_component->S) * sizeof(char));
     if (tmpv == NULL)
@@ -146,13 +183,52 @@ void swap_component_pointer(component *current_component, component *next_compon
     }
 }
 
-// Binary search of the key in component pC
-// Set index to 1 and value to the value if index, else set index to 0.
-void component_search(component *pC, int key, int* index, char* value, int value_size){
-    *index = binary_search(pC->keys, key, 0, *(pC->Ne)-1);
-    if (*index != -1){
-        // Check key not deleted
-        if (*(pC->values + (*index)*value_size) == '!') *index = -2;
-        else strcpy(value, pC->values + (*index)*value_size);
+void merge_components(component* next_component, component* current_component, char* name,
+                      int value_size, int filename_size){
+    if (next_component->Ne == 0){
+        swap_component_pointer(current_component, next_component, value_size);
     }
+    else{
+        // We don't free the memory in prev component,
+        // we just update the number of elements in it.
+        merge_list(current_component->keys, next_component->keys,
+                   current_component->values, next_component->values,
+                   current_component->Ne, next_component->Ne,
+                   value_size);
+    }
+    // Updates number of elements
+    *next_component->Ne += *current_component->Ne;
+    *current_component->Ne = 0;
+
+    // Write the component to disk
+    write_disk_component(next_component, name, value_size, filename_size);
+    write_disk_component(current_component, name, value_size, filename_size);
+}
+
+// Seach in the disk component stored in filename key.
+void component_search(int* index, int key, int length, char* filename){
+    // Mapping the file into memory
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1){
+        perror("open");
+    }
+    int* keys = mmap(0, length*sizeof(int), PROT_READ, MAP_SHARED, fd, 0);
+    if (keys == MAP_FAILED){
+        perror ("mmap");
+    }
+
+    // Checking extreme of the current component
+    if ((key >= keys[0]) && (key <= keys[length-1])){
+        // Binary search
+        if (VERBOSE == 1) printf("Reading %s\n", filename);
+        *index = binary_search(keys, key, 0, length-1);                    
+    }
+
+    // Closing file
+    if (close(fd) == -1){
+        perror ("close");
+    }
+
+    // Free mmap memory
+    munmap(keys, length*sizeof(int));
 }
