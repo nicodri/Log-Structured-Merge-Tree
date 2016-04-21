@@ -242,7 +242,7 @@ char* read_lsm(LSM_tree *lsm, int key){
         free(component_id);
     }
     // Check if key found and not previously deleted
-    if ((*index >= 0) && (*(value_output) != '!')){
+    if ((*index >= 0) && (*(value_output) != *TOMBSTONE)){
         free(index);
         return value_output;
     }

@@ -188,8 +188,6 @@ int main(){
     read_test(lsm_backup, size_test/2 + 1000 - 1);
     print_state(lsm_backup);
 
-
-
     // Free memory
     free_lsm(lsm_backup);
 
