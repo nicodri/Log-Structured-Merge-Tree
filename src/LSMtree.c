@@ -49,8 +49,9 @@ void free_lsm(LSM_tree *lsm){
 
 // Create LSM Tree with a fixed number of component Nc with
 // initialization of the components on memory & on disk (create
-// the files inside the folder, with a cleaning if needed).
+// the files inside the folder).
 // Check if folder exists and clean it if needed.
+// Save metadata and memory component for recovery.
 // TODO: check the validity of the args
 void build_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size,
                int filename_size){
@@ -74,6 +75,9 @@ void build_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size,
 
     // Initialize on disk the disk components
     create_disk_component(name, Nc, filename_size);
+
+    // Save intialized state of the lsm
+    write_lsm_to_disk(lsm);
 }
 
 // Function to write lsm tree to disk
@@ -82,8 +86,8 @@ void build_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size,
 //     - name
 //     - Ne
 //     - Nc
-//     - Cs_Ne
 //     - Cs_size
+//     - Cs_Ne (updated regularly)
 
 void write_lsm_to_disk(LSM_tree *lsm){
     // Save memory components to disk
@@ -98,8 +102,8 @@ void write_lsm_to_disk(LSM_tree *lsm){
     fwrite(&lsm->Ne, sizeof(int), 1, fout);
     fwrite(&lsm->Nc, sizeof(int), 1, fout);
     fwrite(&lsm->value_size, sizeof(int), 1, fout);
-    fwrite(lsm->Cs_Ne, sizeof(int), lsm->Nc+2, fout);
     fwrite(lsm->Cs_size, sizeof(int), lsm->Nc+2, fout);
+    fwrite(lsm->Cs_Ne, sizeof(int), lsm->Nc+2, fout);
 
     fclose(fout);
     free(filename);
@@ -121,8 +125,8 @@ void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size){
     fread(&lsm->value_size, sizeof(int), 1, fin);
     lsm->Cs_Ne = (int *) malloc((lsm->Nc + 2)*sizeof(int));
     lsm->Cs_size = (int *) malloc((lsm->Nc + 2)*sizeof(int));
-    fread(lsm->Cs_Ne, sizeof(int), lsm->Nc + 2, fin);
     fread(lsm->Cs_size, sizeof(int), lsm->Nc + 2, fin);
+    fread(lsm->Cs_Ne, sizeof(int), lsm->Nc + 2, fin);
 
     fclose(fin);
     free(filename);
@@ -138,11 +142,9 @@ void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size){
 // TOTEST: append_on_disk
 // TODO: efficient log which saves the state of the LSM-tree
 void append_lsm(LSM_tree *lsm, int key, char *value){
-    // TODO: check validity of the args (size of the value, ...)
-
-    // Before on disk than on memory (for log purpose in cash of crash)
-    // Append to C0 on disk
-    //append_on_disk(lsm->C0, key, value, lsm->name, lsm->value_size, lsm->filename_size);
+    // Track the number of appends to manage the logging of C0
+    static int num_append = 0;
+    num_append++;
 
     // Append to C0 on memory
     lsm->C0->keys[lsm->Cs_Ne[0]] = key;
@@ -152,6 +154,19 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
     lsm->Ne++;
     lsm->Cs_Ne[0]++;
 
+    // Append to C0 on disk every k appends (for log purpose in cash of crash)
+    // TODO: log on disk before update on memory?
+    if (num_append % CO_TOLERANCE == 0){
+        if (CO_TOLERANCE <= *lsm->Cs_size){
+            // printf("Num append to write %d\n", num_append);
+            // Bulk-append to C0
+            append_on_disk(lsm->C0, num_append, lsm->name, lsm->value_size, lsm->filename_size);
+            update_component_size(lsm);
+        }
+        // Re-initialize the appends counter
+        num_append = 0;
+    }
+
     // MERGING OPERATIONS
     
     // Check if C0 is full
@@ -160,9 +175,12 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
         merge_sort_with_values(lsm->C0->keys, lsm->C0->values, 0,
                                lsm->Cs_size[0]-1, lsm->value_size);
         merge_components(lsm->buffer, lsm->C0, lsm->name, lsm->value_size, lsm->filename_size);
+
+        // Update the number of elements in component on disk
+        update_component_size(lsm);
     }
 
-    // Step 2: iterative over all the full components
+    // iterative over all the full components
     // First starts with buffer -> C1, then C1 -> C2 ,...
     int current_C_index = 1;
     component* current_component = lsm->buffer;
@@ -177,7 +195,11 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
                             lsm->Cs_Ne + (current_C_index+1),
                             component_id,lsm->Cs_size + (current_C_index+1),
                             lsm->value_size, lsm->filename_size);
-        merge_components(next_component, current_component, lsm->name, lsm->value_size, lsm->filename_size);
+        merge_components(next_component, current_component, lsm->name, lsm->value_size,
+                         lsm->filename_size);
+
+        // Update the number of elements in component on disk
+        update_component_size(lsm);
 
         // Updates component
         if (current_C_index > 1){
@@ -277,6 +299,18 @@ void delete_lsm(LSM_tree *lsm, int key){
     char* deletion = (char*) malloc(lsm->value_size*sizeof(char));
     sprintf(deletion, TOMBSTONE);
     update_lsm(lsm, key, deletion);
+}
+
+// Updates number of elements in each component in the metadata of the LSM
+void update_component_size(LSM_tree *lsm){
+    char *filename = (char*) calloc(56, sizeof(char));
+    sprintf(filename,"%s/meta.data", lsm->name);
+    FILE* fout = fopen(filename, "r+b");
+    // Goto the offset of Cs_Ne
+    fseek(fout, -(lsm->Nc+2)*sizeof(int), SEEK_END);
+    fwrite(lsm->Cs_Ne, sizeof(int), lsm->Nc+2, fout);
+    fclose(fout);
+    free(filename);    
 }
 
 // Print number of element in the tree

@@ -57,6 +57,26 @@ void read_test(LSM_tree* lsm, int key){
     free(value_read); 
 }
 
+void batch_read_disk_component(LSM_tree *lsm, int disk_index, int num_keys){
+    char * comp_id = (char *) malloc(10*sizeof(char));
+    sprintf(comp_id, "C%d", disk_index);
+
+    component * C = (component *) malloc(sizeof(component));
+    read_disk_component(C, lsm->name, lsm->Cs_Ne + disk_index, comp_id,
+                        lsm->Cs_size + disk_index, VALUE_SIZE, FILENAME_SIZE);
+
+    // Printing
+    printf("Number of elements in component %s: %d\n", comp_id, *(lsm->Cs_Ne + disk_index));
+    printf("First %d keys \n", num_keys);
+    for (int i=0; i < num_keys; i++){
+        printf("%d \n", C->keys[i]);
+    }
+
+    // Free memory
+    free(comp_id);
+    free(C);
+}
+
 // Generate and save to disk an LSM-Tree
 void lsm_generation(char* name, int size_test){
     // Creating lsm structure:
@@ -112,49 +132,23 @@ void lsm_generation(char* name, int size_test){
         printf("%d \n", lsm->C0->keys[i]);
     }
 
-    // Printing first element of adisk component (read from disk)
-    int disk_index = 5;
-    char * comp_id = (char *) malloc(10*sizeof(char));
-    sprintf(comp_id, "C%d", disk_index);
+    // ---------------- TEST READING COMPONENT FROM DISK
+    // batch_read_disk_component(lsm, 0, 10);
 
-    component * C = (component *) malloc(sizeof(component));
-    read_disk_component(C, name, lsm->Cs_Ne + disk_index+1, comp_id,
-                        lsm->Cs_size + disk_index+1, VALUE_SIZE, FILENAME_SIZE);
-
-    // Printing
-    printf("First 10 keys of %s are\n", comp_id);
-    for (int i=0; i < 10; i++){
-        printf("%d \n", C->keys[i]);
-    
-    }
-
-    // ---------------- TEST OF READING FROM LSM
-
-    // Reading from lsm
-    int length = 5;
-    int targets[] = {-3, 0, 100, 7000, 60000};
-    char* value_read;
-    for (int i=0; i<length; i++){
-        value_read = read_lsm(lsm, targets[i]);
-        if (value_read != NULL) printf("Reading key: %d; value found: %s\n",
-                                       targets[i], value_read);
-        else printf("Reading key: %d; key not found\n", targets[i]);
-        free(value_read);
-    } 
+    // // STOP
+    // return
 
     // Writing to disk
     write_lsm_to_disk(lsm);
 
     // Free memory
-    free(comp_id);
-    free_component(C);
     free_lsm(lsm);
 }
 
 //Test storing on disk an array
 int main(){
     char name[] = "test";
-    int size_test = 1000000;
+    int size_test = 100000;
 
     // ---------------- TEST GENERATING LSM
     lsm_generation(name, size_test);
@@ -166,27 +160,27 @@ int main(){
     print_state(lsm_backup);
 
     // ---------------- TEST READING
-    // batch_random_read(lsm_backup, 5, 0, 2*size_test);
+    batch_random_read(lsm_backup, 5, 0, 2*size_test);
     
     // ---------------- TEST UPDATING
-    printf("BEFORE UPDATE\n");
-    read_test(lsm_backup, size_test/2);
-    read_test(lsm_backup, size_test/2 + 1000 - 1);
-    batch_updates(lsm_backup, size_test/2, size_test/2 + 1000);
-    printf("AFTER UPDATE\n");
-    read_test(lsm_backup, size_test/2);
-    read_test(lsm_backup, size_test/2 + 1000 - 1);
-    print_state(lsm_backup);
+    // printf("BEFORE UPDATE\n");
+    // read_test(lsm_backup, size_test/2);
+    // read_test(lsm_backup, size_test/2 + 1000 - 1);
+    // batch_updates(lsm_backup, size_test/2, size_test/2 + 1000);
+    // printf("AFTER UPDATE\n");
+    // read_test(lsm_backup, size_test/2);
+    // read_test(lsm_backup, size_test/2 + 1000 - 1);
+    // print_state(lsm_backup);
 
-    // ---------------- TEST DELETING
-    printf("BEFORE DELETE\n");
-    read_test(lsm_backup, size_test/2);
-    read_test(lsm_backup, size_test/2 + 1000 - 1);
-    batch_deletes(lsm_backup, size_test/2, size_test/2 + 1000);
-    printf("AFTER DELETE\n");
-    read_test(lsm_backup, size_test/2);
-    read_test(lsm_backup, size_test/2 + 1000 - 1);
-    print_state(lsm_backup);
+    // // ---------------- TEST DELETING
+    // printf("BEFORE DELETE\n");
+    // read_test(lsm_backup, size_test/2);
+    // read_test(lsm_backup, size_test/2 + 1000 - 1);
+    // batch_deletes(lsm_backup, size_test/2, size_test/2 + 1000);
+    // printf("AFTER DELETE\n");
+    // read_test(lsm_backup, size_test/2);
+    // read_test(lsm_backup, size_test/2 + 1000 - 1);
+    // print_state(lsm_backup);
 
     // Free memory
     free_lsm(lsm_backup);

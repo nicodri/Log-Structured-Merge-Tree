@@ -98,20 +98,28 @@ void write_disk_component(component *pC, char *name, int value_size, int filenam
     free(filename_values);
 }
 
-void append_on_disk(component * C, int key, char* value, char* name, int value_size,
+// Append to a component on disk the last N keys/values 
+void append_on_disk(component * C, int N, char* name, int value_size,
                     int filename_size){
     char *filename = (char *) calloc(filename_size + 8,sizeof(char));
     FILE* fd;
-    // Write key
+    // Check the number of keys in the component
+    if (*C->Ne < N) N = *C->Ne;
+
+    // Write the N last keys
     get_files_name(filename, name, C->component_id, "k", filename_size);
     fd = fopen(filename, "ab");
-    fwrite(&key, sizeof(int), 1, fd);
+    fwrite(C->keys + (*C->Ne - N), sizeof(int), N, fd);
     fclose(fd);
-    // Write value
+
+    // Write the N last values
     get_files_name(filename, name, C->component_id, "v", filename_size);
     fd = fopen(filename, "ab");
-    fwrite(value, sizeof(int), value_size, fd);
+    fwrite(C->values + (*C->Ne - N)*value_size, value_size*sizeof(char), N, fd);
     fclose(fd);
+
+    // Free memory
+    free(filename);
 }
 
 // Read value at given index in the component on disk

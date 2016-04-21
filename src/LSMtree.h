@@ -9,6 +9,8 @@
 // verbose of some functions (1 activated, else 0)
 #define VERBOSE 1
 #define TOMBSTONE ((const char *)"!")
+// Tolerance of loss in C0
+#define CO_TOLERANCE 1100
 
 typedef struct component {
     int *keys;
@@ -45,6 +47,7 @@ void append_lsm(LSM_tree *lsm, int key, char *value);
 char* read_lsm(LSM_tree *lsm, int key);
 void update_lsm(LSM_tree *lsm, int key, char *value);
 void delete_lsm(LSM_tree *lsm, int key);
+void update_component_size(LSM_tree *lsm);
 void print_state(LSM_tree *lsm);
 
 // Declarations for component.c
@@ -55,7 +58,7 @@ void create_disk_component(char* name, int Nc, int filename_size);
 void read_disk_component(component* C, char *name, int* Ne, char *component_id,
                          int* component_size, int value_size, int filename_size);
 void write_disk_component(component *pC, char *name, int value_size, int filename_size);
-void append_on_disk(component * C, int key, char* value, char* name, int value_size,
+void append_on_disk(component * C, int N, char* name, int value_size,
                     int filename_size);
 void read_value(char* value, int index, char* name, char* component_id, int value_size,
                 int filename_size);
