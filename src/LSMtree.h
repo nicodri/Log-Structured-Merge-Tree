@@ -5,9 +5,12 @@
 #include <sys/mman.h>
 #include <fcntl.h> // for open
 #include <unistd.h> // for close
+#include <pthread.h>
+#include <signal.h>
 
 // verbose of some functions (1 activated, else 0)
-#define VERBOSE 1
+#define VERBOSE 0
+// Indicator for a deleted key
 #define TOMBSTONE ((const char *)"!")
 // Tolerance of loss in C0
 #define CO_TOLERANCE 1100
@@ -35,6 +38,23 @@ typedef struct LSM_tree {
     int *Cs_size; // List of number of elements per component: [C0, buffer, C1, C2,...]
 } LSM_tree;
 
+// Struct used for the parallel implementation
+typedef struct arg_thread_common
+{
+    int key;
+    int filename_size;
+    char* name;
+} arg_thread_common;
+
+typedef struct arg_thread
+{
+    int thread_id;
+    int Cs_Ne;
+    arg_thread_common* common;
+} arg_thread;
+
+
+
 // Declarations for LSMTree.c
 void init_lsm(LSM_tree *lsm, char* name, int filename_size);
 void create_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size, int filename_size);
@@ -44,7 +64,9 @@ void build_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size,
 void write_lsm_to_disk(LSM_tree *lsm);
 void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size);
 void append_lsm(LSM_tree *lsm, int key, char *value);
-char* read_lsm(LSM_tree *lsm, int key);
+void insert_lsm(LSM_tree *lsm, int key, char *value);
+int read_lsm(LSM_tree *lsm, int key, char* value);
+int read_lsm_parallel(LSM_tree *lsm, int key, char* value);
 void update_lsm(LSM_tree *lsm, int key, char *value);
 void delete_lsm(LSM_tree *lsm, int key);
 void update_component_size(LSM_tree *lsm);
@@ -60,7 +82,7 @@ void read_disk_component(component* C, char *name, int* Ne, char *component_id,
 void write_disk_component(component *pC, char *name, int value_size, int filename_size);
 void append_on_disk(component * C, int N, char* name, int value_size,
                     int filename_size);
-void read_value(char* value, int index, char* name, char* component_id, int value_size,
+void read_value(char* value, int index, char* name, int component_index, int value_size,
                 int filename_size);
 void swap_component_pointer(component *current_component, component *next_component,
                             int value_size);
@@ -71,6 +93,8 @@ void component_search(int* index, int key, int length, char* filename);
 // Declarations for helper.c
 void get_files_name(char *filename, char *name, char* component_id, char* component_type,
                      int filename_size);
+void get_files_name_disk(char *filename, char *name, int component_index,
+                         char* component_type, int filename_size);
 int binary_search(int* keys, int key, int down, int top);
 void keys_linear_search(int* index, int key, int* keys, int Ne);                     
 void merge_with_values(int* keys, char* values, int down, int middle, int top,

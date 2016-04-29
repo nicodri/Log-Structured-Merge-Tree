@@ -139,7 +139,6 @@ void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size){
 }
 
 // Append (k,v) to the lsm tree
-// TOTEST: append_on_disk
 // TODO: efficient log which saves the state of the LSM-tree
 void append_lsm(LSM_tree *lsm, int key, char *value){
     // Track the number of appends to manage the logging of C0
@@ -150,8 +149,7 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
     lsm->C0->keys[lsm->Cs_Ne[0]] = key;
     strcpy(lsm->C0->values + lsm->Cs_Ne[0]*lsm->value_size, value);
 
-    //Increment number of elements
-    lsm->Ne++;
+    //Increment number of elements in C0
     lsm->Cs_Ne[0]++;
 
     // Append to C0 on disk every k appends (for log purpose in cash of crash)
@@ -186,8 +184,10 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
     component* current_component = lsm->buffer;
     char * component_id = (char*) malloc(8*sizeof(char));
 
-    // Check if current component is full
-    while (lsm->Cs_Ne[current_C_index] >= lsm->Cs_size[current_C_index]){
+    // TODO: case of the last component (only merging and reallocation of memory if needed)
+    // Check if current component is still able to recieve one batch of its previous
+    // component, else it's considered full and need to be flush in its next component
+    while (lsm->Cs_Ne[current_C_index] + lsm->Cs_size[current_C_index-1] > lsm->Cs_size[current_C_index]){
         // Initialize and read next component
         component* next_component = (component *) malloc(sizeof(component));
         sprintf(component_id, "C%d", current_C_index);
@@ -209,22 +209,33 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
         current_component = next_component;
     }
     // To avoiding freeing the buffer
-    if (current_C_index >1 ) free_component(current_component);
+    if (current_C_index >1 ) free_component(current_component);;
     free(component_id);
 }
 
+// Insert key,value in lsm
+// Wrapper for the append function just to update the total number
+// of elements in the LSMTree (assuming a correct behavior of the user,
+// i.e. insertion of new elements and updates/deletes of stored elts)
+void insert_lsm(LSM_tree *lsm, int key, char *value){
+    // increment total number of elements in the LSMTree
+    lsm->Ne++;
+    append_lsm(lsm, key, value);
+}
+
 // Read value of key in LSMTree lsm
-// return NULL if key not present
-char* read_lsm(LSM_tree *lsm, int key){
+// return -1 if value not present, else index >=0 with value pointer
+// set to the value found
+int read_lsm(LSM_tree *lsm, int key, char* value){
     // Memory allocation
     int* index = (int*) malloc(sizeof(int)); // -1 not found else found
-    char* value_output = (char*) malloc(lsm->value_size*sizeof(char));
+    if (value == NULL) value = (char*) malloc(lsm->value_size*sizeof(char));
 
     // Linear scan in C0 (initialize index to -1)
     keys_linear_search(index, key, lsm->C0->keys, lsm->Cs_Ne[0]);
     if (*index != -1){
         if (VERBOSE == 1) printf("Key found in C0\n");
-        strcpy(value_output, lsm->C0->values + (*index)*lsm->value_size);
+        strcpy(value, lsm->C0->values + (*index)*lsm->value_size);
     }
 
     // Reading buffer
@@ -233,45 +244,205 @@ char* read_lsm(LSM_tree *lsm, int key){
         *index = binary_search(lsm->buffer->keys, key, 0, lsm->Cs_Ne[1]-1);
         if (*index != -1){
             if (VERBOSE == 1) printf("Key found in %s\n", lsm->buffer->component_id);
-            strcpy(value_output, lsm->buffer->values + (*index)*lsm->value_size);
+            strcpy(value, lsm->buffer->values + (*index)*lsm->value_size);
         }
     }
 
     // Binary search over disk components
     if (*index == -1){
         char* filename_keys = (char *) calloc(lsm->filename_size + 8,sizeof(char));
-        char * component_id = (char*) malloc(8*sizeof(char));
 
         // Starting with C1 (indexed at 2 in Cs_Ne)
         for (int j=2; j<lsm->Nc+1; j++){
             if (lsm->Cs_Ne[j] > 0){
                 // Build filename of the keys
-                sprintf(component_id, "C%d", j-1);
-                get_files_name(filename_keys, lsm->name, component_id, "k", lsm->filename_size);
+                get_files_name_disk(filename_keys, lsm->name, j-1, "k",
+                                    lsm->filename_size);
                 // Searching in component
                 component_search(index, key, lsm->Cs_Ne[j], filename_keys);
 
                 // Key found (can still be deleted)
                 if (*index != -1){
-                    if (VERBOSE == 1) printf("Key Found in %s\n", component_id);
-                    read_value(value_output, *index, lsm->name, component_id, 
+                    if (VERBOSE == 1) printf("Key Found in C%d\n", j-1);
+                    read_value(value, *index, lsm->name, j-1, 
                                lsm->value_size, lsm->filename_size);
                     break;
                 }
             }
         }
         free(filename_keys);
-        free(component_id);
     }
     // Check if key found and not previously deleted
-    if ((*index >= 0) && (*(value_output) != *TOMBSTONE)){
+    if ((*index >= 0) && (*(value) != *TOMBSTONE)){
         free(index);
-        return value_output;
+        return 1;
     }
-    free(value_output);
     free(index);
     // Case value not found: component was initialized only
-    return NULL;
+    return -1;
+}
+
+static void handler(int signum)
+{
+    // printf("Killing thread\n");
+    pthread_exit(NULL);
+}
+
+void *component_search_parallel(void *argument){
+    // Change the cancel state to asynchronous
+    // pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    int index = -1;
+    // Reading argument
+    arg_thread *arg = (arg_thread *) argument;
+    arg_thread_common *common = (arg_thread_common*) arg->common;
+
+    // Getting filename of the disk component
+    char* filename = (char*) calloc(common->filename_size + 8,sizeof(char));
+    if (filename == NULL) {
+        fprintf(stderr, "failed to allocate memory.\n");
+        pthread_exit( (void*) index);
+    }
+    get_files_name_disk(filename, common->name, arg->thread_id, "k", common->filename_size);
+
+    // Printing arg
+    // printf("Inside Thread id: %d, key: %d, Cs_Ne: %d, filename: %s\n", arg->thread_id,
+    //        common->key, arg->Cs_Ne, filename);
+
+    // Mapping the file into memory
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1){
+        perror("open");
+    }
+    int* keys = mmap(0, arg->Cs_Ne*sizeof(int), PROT_READ, MAP_SHARED, fd, 0);
+    if (keys == MAP_FAILED){
+        perror ("mmap");
+    }
+
+    // Checking extreme of the current component
+    if ((common->key >= keys[0]) && (common->key <= keys[arg->Cs_Ne-1])){
+        // Binary search
+        if (VERBOSE == 1) printf("Reading %s\n", filename);
+        index = binary_search(keys, common->key, 0, arg->Cs_Ne-1);                    
+    }
+
+    // Closing file
+    if (close(fd) == -1){
+        perror ("close");
+    }
+
+    // Free mmap memory
+    munmap(keys, arg->Cs_Ne*sizeof(int));
+    // Free thread_arg
+    free(filename);
+    free(arg);
+
+    pthread_exit( (void*) index);
+
+    // return (void *) (index);
+}
+
+// Read value of key in LSMTree lsm
+// return -1 if value not present, else index >=0 with value pointer
+// set to the value found
+int read_lsm_parallel(LSM_tree *lsm, int key, char* value){
+    // Memory allocation
+    int* index = (int*) malloc(sizeof(int)); // -1 not found else found
+    if (value == NULL) value = (char*) malloc(lsm->value_size*sizeof(char));
+
+    // Linear scan in C0 (initialize index to -1)
+    keys_linear_search(index, key, lsm->C0->keys, lsm->Cs_Ne[0]);
+    if (*index != -1){
+        if (VERBOSE == 1) printf("Key found in C0\n");
+        strcpy(value, lsm->C0->values + (*index)*lsm->value_size);
+    }
+
+    // Reading buffer
+    // Checking extreme of the buffer
+    if ((*index == -1) && (key >= lsm->buffer->keys[0]) && (key <= lsm->buffer->keys[lsm->Cs_Ne[1]-1])){
+        *index = binary_search(lsm->buffer->keys, key, 0, lsm->Cs_Ne[1]-1);
+        if (*index != -1){
+            if (VERBOSE == 1) printf("Key found in %s\n", lsm->buffer->component_id);
+            strcpy(value, lsm->buffer->values + (*index)*lsm->value_size);
+        }
+    }
+
+    // Binary search over disk components
+    if (*index == -1){
+        int result_code;
+        void *thread_result;
+        pthread_t threads[lsm->Nc-1];
+        // Create common arguments of the threads
+        arg_thread_common* common = (arg_thread_common*) malloc(sizeof(arg_thread_common));
+        common->key = key;
+        common->filename_size = lsm->filename_size;
+        common->name = lsm->name;
+
+        // V1: Associate signal with handler
+        struct sigaction actions;
+        memset(&actions, 0, sizeof(actions));
+        sigemptyset(&actions.sa_mask);
+        actions.sa_flags = 0;
+        actions.sa_handler = handler;
+
+        int rc = sigaction(SIGALRM,&actions,NULL);
+        // V2: Associate signal with handler
+        // signal(SIGUSR1, handler);
+
+        // Starting with C1 (indexed at 2 in Cs_Ne)
+        for (int j=2; j<lsm->Nc+1; j++){
+            if (lsm->Cs_Ne[j] > 0){
+                // Build the thread argument
+                arg_thread* arg = malloc(sizeof(arg_thread) + sizeof(arg_thread_common*));
+                // j starts at 2, we start the thread id at 0
+                arg->thread_id = j-1;
+                arg->Cs_Ne = lsm->Cs_Ne[j];
+                arg->common = common;
+                // Debugging
+                // printf("thread_id: %d, key: %d, Cs_Ne: %d , lsmt name: %s, filename size %d\n",
+                //        arg->thread_id, common->key, arg->Cs_Ne, common->name,
+                //        common->filename_size);
+
+                // Searching in component in current thread
+                result_code = pthread_create(&threads[j], NULL, component_search_parallel,
+                                             (void *) arg);
+            }
+        }
+        // Reading answer from threads
+        for (int j=2; j<lsm->Nc+1; j++){
+            if (lsm->Cs_Ne[j] > 0){
+                // If value was found by previous, next thread is cancelled
+                if (*index != -1) {
+                    // TOFIX: Wait for the thread to finish
+                    // pthread_join(threads[j], &thread_result);
+                    pthread_kill(threads[j], SIGALRM);
+                    pthread_detach(threads[j]);
+                    continue;
+                }
+                result_code = pthread_join(threads[j], &thread_result);
+                // Debugging
+                // printf("Thread id: %d, result: %d\n", j-2, (int) thread_result);
+                // Case key found
+                if ((int) thread_result != -1){
+                    // TOFIX: inefficient
+                    *index = (int) thread_result;
+                    // Key found (can still be deleted)
+                    if (VERBOSE == 1) printf("Key Found in C%d, by thread id: %d\n", j-1, j-2);
+                    read_value(value, *index, lsm->name, j-1,
+                               lsm->value_size, lsm->filename_size);
+                }
+            }
+        }
+        // Freeing memory
+        free(common);
+    }
+    // Check if key found and not previously deleted
+    if ((*index >= 0) && (*(value) != *TOMBSTONE)){
+        free(index);
+        return 1;
+    }
+    free(index);
+    // Case value not found
+    return -1;
 }
 
 // Update (key, value) to the lsm tree: idea is to scan linearly
@@ -286,16 +457,22 @@ void update_lsm(LSM_tree *lsm, int key, char *value){
     if (*index != -1){
         // Update the value for key index
         strcpy(lsm->C0->values + (*index)*lsm->value_size, value);
-        return ;
     }
-    // Append the update
-    // TODO: correct update of the number of elements in the lsm tree
-    // or decide if we want to have it as exact value
-    append_lsm(lsm, key, value);
+    else{
+        // Append the update
+        // TODO: correct update of the number of elements in the lsm tree
+        // or decide if we want to have it as exact value
+        append_lsm(lsm, key, value);
+    }
+    // free memory
+    free(index);
 }
 
 // Delete (key, value) to the lsm tree: 
 void delete_lsm(LSM_tree *lsm, int key){
+    // Decrement total number of elments in lsm
+    lsm->Ne--;
+    // Use deletion character
     char* deletion = (char*) malloc(lsm->value_size*sizeof(char));
     sprintf(deletion, TOMBSTONE);
     update_lsm(lsm, key, deletion);

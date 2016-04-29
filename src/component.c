@@ -3,8 +3,8 @@
 // Component constructor
 void init_component(component * c, int* component_size, int value_size, int* Ne,
                     char* component_id){
-    c->keys = (int *) malloc((*component_size)*sizeof(int));
     // Valgrind modif: malloc to calloc (because of padding)
+    c->keys = (int *) calloc((*component_size), sizeof(int));
     c->values = (char *) calloc((*component_size)*value_size, sizeof(char));
     c->Ne = Ne;
     c->S = component_size;
@@ -23,7 +23,7 @@ void free_component(component *c){
 
 // Create on disk the files for the disk component
 void create_disk_component(char* name, int Nc, int filename_size){
-    char *filename = (char *) calloc(filename_size + 8,sizeof(char));
+    char *filename = (char *) calloc(filename_size + 8, sizeof(char));
     // Arbitrary size big enough
     char* component_id = (char*) malloc(16*sizeof(char));
     char component_type[] = {'k','v'};
@@ -75,7 +75,6 @@ void read_disk_component(component* C, char *name, int* Ne, char *component_id,
     free(filename_values);
 }
 
-
 // Write on disk the keys and values of the component pC
 void write_disk_component(component *pC, char *name, int value_size, int filename_size){
     // Building filename
@@ -123,12 +122,12 @@ void append_on_disk(component * C, int N, char* name, int value_size,
 }
 
 // Read value at given index in the component on disk
-void read_value(char* value, int index, char* name, char* component_id, int value_size,
+void read_value(char* value, int index, char* name, int component_index, int value_size,
                 int filename_size){
     if (value == NULL) value = (char*) malloc(value_size*sizeof(char));
     char* filename = (char *) calloc(filename_size + 8,sizeof(char));
     // Reading the found value at the corresponding index
-    get_files_name(filename, name, component_id, "v",
+    get_files_name_disk(filename, name, component_index, "v",
                    filename_size);
 
     FILE* fd = fopen(filename, "rb");
@@ -138,6 +137,9 @@ void read_value(char* value, int index, char* name, char* component_id, int valu
     fseek(fd, index*value_size*sizeof(char), SEEK_SET);
     fread(value, value_size, 1, fd);
     fclose(fd);
+
+    // free memory
+    free(filename);
 }
 
 // TOFIX: code redundancy BUT hard to divide into 2 functions because different type

@@ -8,6 +8,15 @@ void get_files_name(char *filename, char *name, char* component_id, char* compon
     sprintf(filename, "%s/%c%s.data", name, *component_type, component_id);
 }
 
+// Same signature than get_files_name but only for disk component
+// i.e. component_index is an int and component_id will be set to "Ccomponent_index"
+void get_files_name_disk(char *filename, char *name, int component_index,
+                         char* component_type, int filename_size){
+    // Check if memory was allocated
+    if (filename == NULL) filename = (char *) calloc(filename_size + 8,sizeof(char));
+    sprintf(filename, "%s/%cC%d.data", name, *component_type, component_index);
+}
+
 // Binary search of key inside sorted integer array keys[down,..,top]
 // return global index in keys if found else -1
 int binary_search(int* keys, int key, int down, int top){
@@ -76,21 +85,23 @@ void merge_with_values(int* keys, char* values, int down, int middle, int top,
 // keys and values (corresponds to the next component)
 // Tested: ok
 void merge_list(int* keys1, int* keys2, char* values1, char* values2,
-                      int* size1, int* size2, int value_size){
+                      int* Ne1, int* Ne2, int value_size){
     // Temporary files with a copy of keys2 and values2 because
     // both files are modified inplace
-    int* keys2_temp = (int *) malloc((*size2) * sizeof(int));
-    for (int i=0; i<(*size2); i++) keys2_temp[i] = keys2[i];
-    char* values2_temp = (char *) malloc(value_size * (*size2) * sizeof(char));
-    for (int i=0; i<(*size2); i++) strcpy(values2_temp + i*value_size,
+    int* keys2_temp = (int *) malloc((*Ne2) * sizeof(int));
+    for (int i=0; i<(*Ne2); i++) keys2_temp[i] = keys2[i];
+    char* values2_temp = (char *) malloc(value_size * (*Ne2) * sizeof(char));
+    for (int i=0; i<(*Ne2); i++) strcpy(values2_temp + i*value_size,
                                        values2 + i*value_size);
 
     // Going through the sublists
     int ileft = 0;
     int iright = 0;
     int i = 0;
-    int number_merges=0; // Count updates/deletes
-    while ((ileft < (*size1)) && (iright < (*size2))){
+    int number_merges=0; // Count updates/deletes to update metadata
+    while ((ileft < (*Ne1)) && (iright < (*Ne2))){
+        // if (i >= *Ne2) printf("ERROR: i is %d, Ne1: %d, Ne2: %d, iright: %d , ileft: %d\n", i,
+        //                       *Ne1, *Ne2, iright, ileft);
         // Filling from keys2_temp
         if (keys1[ileft] > keys2_temp[iright]){
             keys2[i] = keys2_temp[iright];
@@ -104,7 +115,7 @@ void merge_list(int* keys1, int* keys2, char* values1, char* values2,
         }
         // Case with equality (when updates/delete operation)
         else{
-            // Same behavior for updates/delets, we keep the most recent one (upper)
+            // Same behavior for updates/deletes, we keep the most recent one (upper)
             // printf("DEBUG: Update/delete case\n");
             // printf("On key: %d\n", keys1[ileft]);
             // printf("Value left: %s \n", values1 + (ileft)*value_size);
@@ -117,15 +128,15 @@ void merge_list(int* keys1, int* keys2, char* values1, char* values2,
             number_merges++;
         }
     }
-    // Update number of elements
-    *size2 = *size2 - number_merges;
+    // Update number of elements in component (because of updates/deletes)
+    *Ne2 = *Ne2 - number_merges;
 
     // Finishing to fill
-    while (ileft < (*size1)){
+    while (ileft < (*Ne1)){
         keys2[i] = keys1[ileft];
         strcpy(values2 + (i++)*value_size, values1 + (ileft++)*value_size);
     }
-    while (iright < (*size2)){
+    while (iright < (*Ne2)){
         keys2[i] = keys2_temp[iright];
         strcpy(values2 + (i++)*value_size, values2_temp + (iright++)*value_size);
     }

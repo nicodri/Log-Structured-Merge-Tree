@@ -9,14 +9,14 @@
 // Read a batch of random keys from an LSM_tree inside the range [key_down, key_up]
 void batch_random_read(LSM_tree *lsm, int num_reads, int key_down, int key_up){
     // To store the value_read
-    char* value_read;
-    int index;
+    char* value_read = (char*) malloc(lsm->value_size*sizeof(char));
+    int index, check;
     // Initialize the seed
     srand(time(NULL));
     for (int i=0; i<num_reads; i++){
         index = (int)(key_down + (rand()/(float)RAND_MAX) * (key_up - key_down));
-        value_read = read_lsm(lsm, index);
-        if (value_read != NULL){
+        check = read_lsm(lsm, index, value_read);
+        if (check == 1){
             if (VERBOSE == 1) printf("Reading key: %d; value found: %s\n",
                                        index, value_read);
         }
@@ -45,9 +45,23 @@ void batch_deletes(LSM_tree *lsm, int key_down, int key_up){
 
 // Custom read of the values at the key
 void read_test(LSM_tree* lsm, int key){
-    char* value_read;
-    value_read = read_lsm(lsm, key);
-    if (value_read != NULL){
+    char* value_read = (char*) malloc(lsm->value_size*sizeof(char));
+    int check = read_lsm(lsm, key, value_read);
+    if (check == 1){
+        if (VERBOSE == 1) printf("Reading key: %d; value found: %s\n",
+                                   key, value_read);
+    }
+    else {
+        if (VERBOSE == 1) printf("Reading key: %d; key not found:\n", key);
+    }
+    free(value_read); 
+}
+
+
+void read_parallel_test(LSM_tree* lsm, int key){
+    char* value_read = (char*) malloc(lsm->value_size*sizeof(char));
+    int check = read_lsm_parallel(lsm, key, value_read);
+    if (check == 1){
         if (VERBOSE == 1) printf("Reading key: %d; value found: %s\n",
                                    key, value_read);
     }
@@ -96,7 +110,7 @@ void lsm_generation(char* name, int size_test){
     // for (int i=0; i < size_test; i++){
     //     // Filling value
     //     sprintf(value, "hello%d", i%150);
-    //     append_lsm(lsm, i, value);
+    //     insert_lsm(lsm, i, value);
     // }    
 
     // Unsorted keys
@@ -106,13 +120,13 @@ void lsm_generation(char* name, int size_test){
         j = size_test/2 - i - 1;
         // Filling value
         sprintf(value, "hello%d", (2*j)%150);
-        append_lsm(lsm, (2*j), value);
+        insert_lsm(lsm, (2*j), value);
     }
     // adding odd keys
     for (int i=size_test/2; i < size_test; i++){
         // Filling value
         sprintf(value, "hello%d", (2*(i-size_test/2) + 1)%150);
-        append_lsm(lsm, 2*(i-size_test/2) + 1, value);
+        insert_lsm(lsm, 2*(i-size_test/2) + 1, value);
     }
 
     // Print status of the lsm tree
@@ -151,7 +165,7 @@ int main(){
     int size_test = 100000;
 
     // ---------------- TEST GENERATING LSM
-    lsm_generation(name, size_test);
+    // lsm_generation(name, size_test);
 
     // ---------------- TEST READING LSM FROM DISK
     printf("Reading LSM from disk:\n");
@@ -160,7 +174,7 @@ int main(){
     print_state(lsm_backup);
 
     // ---------------- TEST READING
-    batch_random_read(lsm_backup, 5, 0, 2*size_test);
+    // batch_random_read(lsm_backup, 5, 0, 2*size_test);
     
     // ---------------- TEST UPDATING
     // printf("BEFORE UPDATE\n");
@@ -181,6 +195,19 @@ int main(){
     // read_test(lsm_backup, size_test/2);
     // read_test(lsm_backup, size_test/2 + 1000 - 1);
     // print_state(lsm_backup);
+
+    // PARALLEL READING TEST
+    read_test(lsm_backup, 999);
+    read_test(lsm_backup, 9999);
+    read_test(lsm_backup, 998000);
+    printf("----------------------------------\n");
+    printf("PARALLEL READS\n");
+    printf("----------------------------------\n");
+    read_parallel_test(lsm_backup, 999);
+    printf("----------------------------------\n");
+    read_parallel_test(lsm_backup, 9999);
+    printf("----------------------------------\n");
+    read_parallel_test(lsm_backup, 998000);
 
     // Free memory
     free_lsm(lsm_backup);
