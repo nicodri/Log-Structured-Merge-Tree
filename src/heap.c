@@ -1,6 +1,7 @@
 // C program to merge k sorted arrays of size n each.
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <limits.h>
  
 // A min heap node
@@ -123,31 +124,90 @@ void mergeKArrays(int *output, int *arr, int k, int n)
         replaceMin(hp, root);
     }
 }
+
+void mergeKArrays_values(int *keys_output, char *values_output, int *keys,
+                         char* values, int k, int n, int value_size)
+{
+    if (keys_output == NULL) keys_output = (int *) malloc(k*n*sizeof(int));
+    if (values_output == NULL) values_output = (char *) malloc(k*n*value_size*sizeof(char));
+
+    // Create a min heap with k heap nodes.  Every heap node
+    // has first element of an array
+    MinHeapNode *harr = (MinHeapNode *) malloc(k*sizeof(MinHeapNode));
+    for (int i = 0; i < k; i++)
+    {
+        harr[i].element = keys[i*n]; // Store the first element
+        harr[i].i = i;  // index of array
+        harr[i].j = 1;  // Index of next element to be stored from array
+    }
+    // Create the heap
+    MinHeap *hp = (MinHeap*) malloc(sizeof(MinHeap));
+    MinHeap_init(hp, harr, k);
  
+    // Now one by one get the minimum element from min
+    // heap and replace it with next element of its array
+    for (int count = 0; count < n*k; count++)
+    {
+        // Get the minimum element and store it in output
+        MinHeapNode root = getMin(hp);
+        keys_output[count] = root.element;
+        strcpy(values_output + count*value_size, values + (n*root.i + root.j - 1)*value_size);
+ 
+        // Find the next element that will replace current
+        // root of heap. The next element belongs to same
+        // array as the current root.
+        if (root.j < n)
+        {
+            root.element = keys[n*root.i + root.j];
+            root.j += 1;
+        }
+        // If root was the last element of its array
+        else root.element =  INT_MAX; //INT_MAX is for infinite
+ 
+        // Replace root with next element of array
+        replaceMin(hp, root);
+    }
+}
+
 // A utility function to print array elements
-void printArray(int* arr, int size)
+void printArray_int(int* arr, int size)
 {
     for (int i=0; i < size; i++) printf("%d, ", arr[i]);
     printf("\n");
 }
- 
+
+void printArray_char(char* arr, int size, int value_size)
+{
+    for (int i=0; i < size; i++) printf("%s, ", arr + i*value_size);
+    printf("\n");
+}
+
 // Driver program to test above functions
 int main()
-{
+{   
+    int n = 4;
+    int k = 3;
+    int value_size = 12;
     // Change n at the top to change number of elements
     // in an array
-    int arr[] =  {2, 6, 12, 34,
-                  1, 9, 20, 1000,
-                  23, 34, 90, 2000,
-                  3, 4, 5, 7};
-    int n = 4;
-    int k = 4;
+    int keys[] =  {2, 6, 12, 34,
+                  1, 9, 20, 100,
+                  6, 34, 90, 200};
+    // FIlling values
+    char* values = (char *) malloc(k*n*value_size*sizeof(char));
+    for (int i=0; i < n*k; i++){
+        // Filling value
+        sprintf(values + i*value_size, "ab_%d", keys[i]);
+    }
  
-    int *output = (int*) malloc(n*k*sizeof(int));
-    mergeKArrays(output, arr, k, n);
+    int *keys_output = (int*) malloc(n*k*sizeof(int));
+    char *values_output = (char*) malloc(n*k*value_size*sizeof(char));
+    mergeKArrays_values(keys_output, values_output, keys, values, k,
+                        n, value_size);
  
     printf("Merged array is \n");
-    printArray(output, n*k);
+    printArray_int(keys_output, n*k);
+    printArray_char(values_output, n*k, value_size);
  
     return 0;
 }
