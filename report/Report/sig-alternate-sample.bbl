@@ -1,0 +1,8 @@
+\begin{thebibliography}{}
+
+\bibitem[O'Neil et~al., 1996]{lsm}
+O'Neil, P., Cheng, E., Gawlick, D., and O'Neil, E. (1996).
+\newblock The log-structured merge-tree (lsm-tree).
+\newblock {\em Acta Inf.}, 33(4):351--385.
+
+\end{thebibliography}

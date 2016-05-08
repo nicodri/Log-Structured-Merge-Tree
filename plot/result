@@ -1,0 +1,274 @@
+------------------------------------
+---------- EXP BLOOM FILTER
+------------------------------------
+bloom of
+
+
+bloom on, 5 hashes, 10000000 bits
+
+generation_time1 = [ 0.075737, 0.301653, 2.975041, 33.862452 ]
+
+read_time_full1 =  [ 0.059771, 0.560084, 2.812387, 5.691733 ]
+read_time_half1 = [ 0.027026, 0.285551, 1.372883, 2.738212 ]
+
+updates_time1 = [ 0.038411, 0.397354, 2.111856, 4.311012, 21.150731 ]
+
+
+bloom on, 10 hashes, 10000000 bits
+
+generation_time2 = [ 0.076804, 0.347260, 3.669012, 40.347595 ]
+
+read_time_full2 = [ 0.056622, 0.591920, 2.978903, 6.014575 ]
+read_time_half2 = [ 0.028577, 0.301173, 1.428047, 2.890665 ]
+
+updates_time2 = [ 0.043090, 0.460819, 2.471898, 5.134752, 24.794146 ]
+
+bloom on, 5 hashes, 1000000 bits
+
+generation_time3 = [ 0.031942, 0.263881, 2.920011, 31.294598 ]
+
+read_time_full3 = [ 0.054419, 0.557745, 2.879704, 5.879081 ]
+read_time_half3 =  [ 0.038659, 0.405856, 2.116863, 4.868357 ]
+
+updates_time3 = [ 0.042532, 0.435993, 2.187626, 4.461553, 21.739211 ]
+
+bloom on, 10 hashes, 1000000 bits
+
+generation_time4 = [ 0.035020, 0.297071, 3.719979, 35.599067 ]
+
+read_time_full4 = [ 0.060737, 0.601402, 3.078153, 6.278124 ]
+read_time_half4 =  [ 0.041370, 0.435714, 2.241637, 4.423537 ]
+
+updates_time4 = [ 0.039975, 0.422394, 2.203160, 4.605589, 22.728689 ]
+
+
+num_elements = 1000000;
+num_reads = 10000;
+num_updates = 100000;
+
+
+generation_time = [ 3.417755, 3.774972, 3.479524, 3.065683, 3.135843, 3.086700 ]
+read_uniform_time = [ 0.581283, 0.579361, 0.551461, 0.696590, 0.433572, 0.557987 ]
+read_skewed_beginning_time = [ 0.548716, 0.600256, 0.600505, 0.567601, 0.430630, 0.536001 ]
+read_skewed_end_time = [ 0.528562, 0.547915, 0.617458, 0.535801, 0.449455, 0.548006 ]
+udpate_time = [ 0.604489, 0.484911, 0.552530, 0.448643, 0.416557, 0.548409 ]
+update_skewed_beginning_time = [ 0.592825, 0.371829, 0.488737, 0.403457, 0.395107, 0.560208 ]
+update_skewed_end_time = [ 0.708643, 0.365318, 0.538887, 0.388185, 0.394662, 0.559185 ]
+
+generation_throughput = num_elements / np.array(generation_time)
+read_uniform_throughput = num_reads / np.array(read_uniform_time)
+read_skewed_beginning_throughput = num_reads / np.array(read_skewed_beginning_time)
+read_skewed_end_throughput = num_reads / np.array(read_skewed_end_time)
+udpate_throughput = num_updates / np.array(udpate_time)
+update_skewed_beginning_throughput = num_updates / np.array(update_skewed_beginning_time)
+update_skewed_end_throughput = num_updates / np.array(update_skewed_end_time)
+
+
+WITH BOUNDS CHECK
+
+SORTED:
+
+read_uniform_time = [4.198531, 5.703282, 4.978859, 4.843169]
+read_skewed_beginning_time = [4.380644, 5.488670, 5.341354, 4.956924]
+read_skewed_middle_time = [4.386300, 5.546905, 5.284514, 4.766002]
+read_skewed_end_time = [3.322344, 5.475629, 3.390869, 4.643080]
+
+read_uniform_throughput = 10**6 / np.array(read_uniform_time)
+read_skewed_beginning_throughput = 10**6 / np.array(read_skewed_beginning_time)
+read_skewed_middle_throughput = 10**6 / np.array(read_skewed_middle_time)
+read_skewed_end_throughput = 10**6 / np.array(read_skewed_end_time)
+
+UNSORTED:
+
+read uniform time
+Array is [ 0.060216 0.614218 2.854051  ]
+read skewed beginning time
+Array is [ 0.062549 0.569489 2.811474  ]
+read skewed middle time
+Array is [ 0.072961 0.615064 2.774213  ]
+read skewed end time
+Array is [ 0.067061 0.575531 2.724959  ]
+
+WITHOUT BOUNDS CHECK
+
+SORTED
+
+read uniform time
+Array is [ 0.051401 0.524789 2.545655  ]
+read skewed beginning time
+Array is [ 0.061059 0.536757 2.684000  ]
+read skewed middle time
+Array is [ 0.056772 0.557836 2.706108  ]
+read skewed end time
+Array is [ 0.043690 0.342960 1.797185  ]
+
+UNSORTED
+
+read uniform time
+Array is [ 0.051405 0.508051 2.482849  ]
+read skewed beginning time
+Array is [ 0.048661 0.500044 2.501785  ]
+read skewed middle time
+Array is [ 0.050246 0.484705 2.455994  ]
+read skewed end time
+Array is [ 0.050923 0.484638 2.325361  ]
+
+
+generation_time_sorted = [2.758, 2.797504, 3.235857, 3.640044, 3.194697]
+
+read_time_1_eq = [0.075457 , 0.302077 , 0.594437 , 2.962757 , 5.729523 ]
+read_time_1_skewed_beg = [0.066932, 0.289544, 0.565724, 2.778432, 5.648639]
+read_time_1_skewed_end = [0.065451,0.285129,0.567142,2.699290,5.815596]
+read_time_1_skewed_out = [0.046345,0.207186,0.404198,1.964974,4.122398]
+
+
+update_time_1_eq = [0.031600, 0.187533, 0.447126, 2.169824, 4.462424]
+update_time_1_skewed_beg = [0.042448,0.180431,0.411570,1.915240,4.170365]
+update_time_1_skewed_end = [0.044566,0.208219,0.439950,1.955857,4.325360]
+
+
+read_time_2_eq = [0.065444, 0.341148, 0.592306, 3.259015, 6.088088]
+read_time_2_skewed_beg = [0.064956, 0.292344, 0.574794, 2.924045, 5.577123]
+read_time_2_skewed_end = [0.067636, 0.299049, 0.576739, 2.972410, 5.869885]
+read_time_2_skewed_out = [0.044758, 0.217878, 0.432180, 2.155660, 4.355624]
+
+update_time_2_eq = [0.052302, 0.243146, 0.539706, 2.874861, 5.699308]
+update_time_2_skewed_beg = [0.051207,0.258183,0.539883,2.745514,5.620223]
+update_time_2_skewed_end = [0.067241, 0.309591, 0.929252, 2.846495, 5.882674 ]
+
+
+read_time_3_eq = [0.065932, 0.310878, 0.608772, 3.297743, 6.305224]
+read_time_3_skewed_beg = [0.064131, 0.302817, 0.556696, 3.169839, 6.072583]
+read_time_3_skewed_end = [0.062123, 0.297100, 0.549784, 2.848406, 6.047935]
+read_time_3_skewed_out = [0.046660, 0.213864, 0.410171, 2.367686, 4.617167]
+
+update_time_3_eq = [0.032962, 0.192634, 0.460271, 2.566495, 4.692132]
+update_time_3_skewed_beg = [0.038017, 0.205575, 0.535375, 2.198592, 4.481950]
+update_time_3_skewed_end = [0.052400, 0.235064, 0.412987, 2.496109, 4.941505]
+
+read_time_4_eq = [0.036473, 0.179721, 0.350667, 1.748792, 3.554163]
+read_time_4_skewed_beg = [0.039695, 0.178755, 0.354755, 1.686783, 3.432041]
+read_time_4_skewed_end = [0.040816, 0.172905, 0.362462, 1.749371, 3.456359]
+read_time_4_skewed_out = [0.021960, 0.122402, 0.237860, 1.139064, 2.256719]
+
+update_time_4_eq = [0.030490, 0.190892, 0.552801, 2.713536, 5.301494]
+update_time_4_skewed_beg = [0.037563, 0.200247, 0.395696, 2.792777, 4.984597]
+update_time_4_skewed_end = [0.042182, 0.350589, 0.597975, 2.432241, 4.911921]
+
+
+read_time_5_eq = [0.031951, 0.167001, 0.324655, 1.917891, 3.268822]
+read_time_5_skewed_beg = [0.034974, 0.163359, 0.314369, 1.589654, 3.167079]
+read_time_5_skewed_end = [0.031424, 0.155165, 0.313719, 1.618307, 3.402223]
+read_time_5_skewed_out = [0.023553, 0.114816, 0.206761, 1.058237, 2.207364]
+
+update_time_5_eq = [0.030641, 0.188272, 0.568998, 2.742461, 5.418838]
+update_time_5_skewed_beg = [0.037880, 0.200576, 0.367035, 2.723182, 5.062724]
+update_time_5_skewed_end = [0.042136, 0.369973, 0.551329, 2.514821, 4.851905]
+
+
+#### PLOT GENERATION
+
+
+#### PLOT UPDATES
+val_updates = [10000, 50000, 100000, 500000, 1000000]
+
+# eq
+plt.figure(figsize=(12,8))
+plt.plot(val_updates, update_time_1_eq, color = 'red', label = 'LSMT 1')
+plt.plot(val_updates, update_time_2_eq, color = 'blue', label = 'LSMT 2')
+plt.plot(val_updates, update_time_3_eq, color = 'yellow', label = 'LSMT 3')
+plt.plot(val_updates, update_time_4_eq, color = 'green', label = 'LSMT 4')
+plt.plot(val_updates, update_time_5_eq, color = 'gray', label = 'LSMT 5')
+plt.xlabel('Number of keys')
+plt.ylabel('Execution Time')
+plt.title("Execution Time on uniform updates")
+plt.legend(loc = 1)
+plt.xscale('log')
+plt.show()
+
+# skbeg
+plt.figure(figsize=(12,8))
+plt.plot(val_updates, update_time_1_skewed_beg, color = 'red', label = 'LSMT 1')
+plt.plot(val_updates, update_time_2_skewed_beg, color = 'blue', label = 'LSMT 2')
+plt.plot(val_updates, update_time_3_skewed_beg, color = 'yellow', label = 'LSMT 3')
+plt.plot(val_updates, update_time_4_skewed_beg, color = 'green', label = 'LSMT 4')
+plt.plot(val_updates, update_time_5_skewed_beg, color = 'gray', label = 'LSMT 5')
+plt.xlabel('Number of keys')
+plt.ylabel('Execution Time')
+plt.title("Execution Time on skewed updates (first 20%)")
+plt.legend(loc = 1)
+plt.xscale('log')
+plt.show()
+
+# sk end
+plt.figure(figsize=(12,8))
+plt.plot(val_updates, update_time_1_skewed_end, color = 'red', label = 'LSMT 1')
+plt.plot(val_updates, update_time_2_skewed_end, color = 'blue', label = 'LSMT 2')
+plt.plot(val_updates, update_time_3_skewed_end, color = 'yellow', label = 'LSMT 3')
+plt.plot(val_updates, update_time_4_skewed_end, color = 'green', label = 'LSMT 4')
+plt.plot(val_updates, update_time_5_skewed_end, color = 'gray', label = 'LSMT 5')
+plt.xlabel('Number of keys')
+plt.ylabel('Execution Time')
+plt.title("Execution Time on skewed updates (last 20%)")
+plt.legend(loc = 1)
+plt.xscale('log')
+plt.show()
+
+
+#### PLOT READS
+val_reads = [1000, 5000, 10000, 50000, 100000]
+
+plt.figure(figsize=(12,8))
+plt.plot(val_reads, read_time_1_eq, color = 'red', label = 'LSMT 1')
+plt.plot(val_reads, read_time_2_eq, color = 'blue', label = 'LSMT 2')
+plt.plot(val_reads, read_time_3_eq, color = 'yellow', label = 'LSMT 3')
+plt.plot(val_reads, read_time_4_eq, color = 'green', label = 'LSMT 4')
+plt.plot(val_reads, read_time_5_eq, color = 'gray', label = 'LSMT 5')
+plt.xlabel('Number of keys')
+plt.ylabel('Execution Time')
+plt.title("Execution Time on uniform reads")
+plt.legend(loc = 1)
+plt.xscale('log')
+plt.show()
+
+# skbeg
+plt.figure(figsize=(12,8))
+plt.plot(val_reads, read_time_1_skewed_beg, color = 'red', label = 'LSMT 1')
+plt.plot(val_reads, read_time_2_skewed_beg, color = 'blue', label = 'LSMT 2')
+plt.plot(val_reads, read_time_3_skewed_beg, color = 'yellow', label = 'LSMT 3')
+plt.plot(val_reads, read_time_4_skewed_beg, color = 'green', label = 'LSMT 4')
+plt.plot(val_reads, read_time_5_skewed_beg, color = 'gray', label = 'LSMT 5')
+plt.xlabel('Number of keys')
+plt.ylabel('Execution Time')
+plt.title("Execution Time on skewed reads (first 20%)")
+plt.legend(loc = 1)
+plt.xscale('log')
+plt.show()
+
+# sk end
+plt.figure(figsize=(12,8))
+plt.plot(val_reads, read_time_1_skewed_end, color = 'red', label = 'LSMT 1')
+plt.plot(val_reads, read_time_2_skewed_end, color = 'blue', label = 'LSMT 2')
+plt.plot(val_reads, read_time_3_skewed_end, color = 'yellow', label = 'LSMT 3')
+plt.plot(val_reads, read_time_4_skewed_end, color = 'green', label = 'LSMT 4')
+plt.plot(val_reads, read_time_5_skewed_end, color = 'gray', label = 'LSMT 5')
+plt.xlabel('Number of keys')
+plt.ylabel('Execution Time')
+plt.title("Execution Time on skewed reads (last 20%)")
+plt.legend(loc = 1)
+plt.xscale('log')
+plt.show()
+
+# sk out
+plt.figure(figsize=(12,8))
+plt.plot(val_reads, read_time_1_skewed_out, color = 'red', label = 'LSMT 1')
+plt.plot(val_reads, read_time_2_skewed_out, color = 'blue', label = 'LSMT 2')
+plt.plot(val_reads, read_time_3_skewed_out, color = 'yellow', label = 'LSMT 3')
+plt.plot(val_reads, read_time_4_skewed_out, color = 'green', label = 'LSMT 4')
+plt.plot(val_reads, read_time_5_skewed_out, color = 'gray', label = 'LSMT 5')
+plt.xlabel('Number of keys')
+plt.ylabel('Execution Time')
+plt.title("Execution Time on skewed reads (last 10%) with 50% keys out of range")
+plt.legend(loc = 1)
+plt.xscale('log')
+plt.show()

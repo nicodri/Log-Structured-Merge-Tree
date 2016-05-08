@@ -27,7 +27,7 @@ void create_disk_component(char* name, int Nc, int filename_size){
     // Arbitrary size big enough
     char* component_id = (char*) malloc(16*sizeof(char));
     char component_type[] = {'k','v'};
-    for (int i=1; i<Nc; i++){
+    for (int i=1; i<=Nc; i++){
         sprintf(component_id,"C%d", i);
         for (int k=0; k<2; k++){
             // Building filename
@@ -131,6 +131,9 @@ void read_value(char* value, int index, char* name, int component_index, int val
                    filename_size);
 
     FILE* fd = fopen(filename, "rb");
+    // Get the file descriptor
+    // int fint = fileno(fd);
+    // printf("File descriptor: %d\n", fint);
     if (fd == NULL){
         perror("fopen");
     }
@@ -228,11 +231,11 @@ void component_search(int* index, int key, int length, char* filename){
     }
 
     // Checking extreme of the current component
-    if ((key >= keys[0]) && (key <= keys[length-1])){
-        // Binary search
-        if (VERBOSE == 1) printf("Reading %s\n", filename);
-        *index = binary_search(keys, key, 0, length-1);                    
-    }
+    // if ((key >= keys[0]) && (key <= keys[length-1])){
+    // Binary search
+    if (VERBOSE == 1) printf("Reading %s\n", filename);
+    *index = binary_search(keys, key, 0, length-1);                    
+    // }
 
     // Closing file
     if (close(fd) == -1){
@@ -241,4 +244,65 @@ void component_search(int* index, int key, int length, char* filename){
 
     // Free mmap memory
     munmap(keys, length*sizeof(int));
+}
+
+void *component_search_parallel(void *argument){
+    // Change the cancel state to asynchronous
+    // pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    int index = -1;
+    // Reading argument
+    arg_thread *arg = (arg_thread *) argument;
+    arg_thread_common *common = (arg_thread_common*) arg->common;
+
+    // Getting filename of the disk component
+    char* filename = (char*) calloc(common->filename_size + 8,sizeof(char));
+    if (filename == NULL) {
+        fprintf(stderr, "failed to allocate memory.\n");
+        pthread_exit( (void*) index);
+    }
+    get_files_name_disk(filename, common->name, arg->thread_id, "k", common->filename_size);
+
+    // Printing arg
+    // printf("Inside Thread id: %d, key: %d, Cs_Ne: %d, filename: %s\n", arg->thread_id,
+    //        common->key, arg->Cs_Ne, filename);
+
+    // Mapping the file into memory
+    int fd = open(filename, O_RDONLY);
+    // printf("THread: File descriptor: %d\n", fd);
+    if (fd == -1){
+        perror("open");
+    }
+    int* keys = mmap(0, arg->Cs_Ne*sizeof(int), PROT_READ, MAP_SHARED, fd, 0);
+    if (keys == MAP_FAILED){
+        perror ("mmap");
+    }
+    // Closing file (a creaf has been created by mmap)
+    if (close(fd) == -1){
+        perror ("close");
+    }
+
+    // Checking extreme of the current component
+    if ((common->key >= keys[0]) && (common->key <= keys[arg->Cs_Ne-1])){
+        // Binary search
+        if (VERBOSE == 1) printf("Reading %s\n", filename);
+        index = binary_search_signal(keys, common->key, 0, arg->Cs_Ne-1, arg->thread_id,
+                                     common->shared_level, FREQUENCE);
+        // update shared variable if key found
+        if (index != -1){
+            sem_wait(mutex);
+            // printf("Semaphore locked. Shared level init %d thread id %d\n", *(common->shared_level), arg->thread_id);
+            if (*common->shared_level > arg->thread_id) *common->shared_level = arg->thread_id;
+            sem_post(mutex);
+        }                    
+    }
+
+    // Free mmap memory
+    munmap(keys, arg->Cs_Ne*sizeof(int));
+    // Free thread_arg
+    free(filename);
+    free(arg);
+
+    pthread_exit( (void*) index);
+
+    // return (void *) (index);
 }

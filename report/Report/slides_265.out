@@ -1,0 +1,10 @@
+\BOOKMARK [2][]{Outline0.1}{Introduction}{}% 1
+\BOOKMARK [2][]{Outline0.2}{Design}{}% 2
+\BOOKMARK [3][]{Outline0.2.1.6}{Data Structure}{Outline0.2}% 3
+\BOOKMARK [3][]{Outline0.2.2.7}{Operations}{Outline0.2}% 4
+\BOOKMARK [3][]{Outline0.2.3.8}{Persistency}{Outline0.2}% 5
+\BOOKMARK [3][]{Outline0.2.4.9}{Implementation details}{Outline0.2}% 6
+\BOOKMARK [3][]{Outline0.2.5.10}{Parallel Reads}{Outline0.2}% 7
+\BOOKMARK [3][]{Outline0.2.6.11}{Alternative Merging Strategy}{Outline0.2}% 8
+\BOOKMARK [2][]{Outline0.3}{Experiments}{}% 9
+\BOOKMARK [2][]{Outline0.4}{Future Steps}{}% 10

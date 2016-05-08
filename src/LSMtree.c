@@ -13,7 +13,7 @@ void init_lsm(LSM_tree *lsm, char* name, int filename_size){
     lsm->C0 = (component *) malloc(sizeof(component));
     lsm->filename_size = filename_size;
     lsm->Ne = 0;
-
+    if (BLOOM_ON) lsm->bloom = (bloom_filter_t *) malloc(sizeof(bloom_filter_t));
 }
 
 // Create LSM Tree with a fixed number of component Nc without
@@ -22,6 +22,12 @@ void create_lsm(LSM_tree *lsm, char* name, int Nc, int* Cs_size, int value_size,
               int filename_size){
     // Init struct lsm
     init_lsm(lsm, name, filename_size);
+
+    // Init the bloom filter
+    if (BLOOM_ON){
+        // Bloom filter initialized with enough bits for the last component
+        bloom_init(lsm->bloom, (uint64_t) BLOOM_SIZE, HASHES);
+    }
 
     // List contains Nc+2 elements: [C0, buffer, C1, C2,...]
     lsm->value_size = value_size;
@@ -44,6 +50,7 @@ void free_lsm(LSM_tree *lsm){
     free(lsm->Cs_size);
     free_component(lsm->C0);
     free_component(lsm->buffer);
+    if (BLOOM_ON) bloom_destroy(lsm->bloom);
     free(lsm);
 }
 
@@ -98,13 +105,19 @@ void write_lsm_to_disk(LSM_tree *lsm){
     char *filename = (char*) calloc(56, sizeof(char));
     sprintf(filename,"%s/meta.data", lsm->name);
     FILE* fout = fopen(filename, "wb");
-    fwrite(lsm->name, sizeof(lsm->name), 1, fout);
+    printf("name to save %s\n", lsm->name);
+    fwrite(lsm->name, sizeof(char), lsm->filename_size, fout);
     fwrite(&lsm->Ne, sizeof(int), 1, fout);
     fwrite(&lsm->Nc, sizeof(int), 1, fout);
     fwrite(&lsm->value_size, sizeof(int), 1, fout);
     fwrite(lsm->Cs_size, sizeof(int), lsm->Nc+2, fout);
     fwrite(lsm->Cs_Ne, sizeof(int), lsm->Nc+2, fout);
-
+    // save bloom filter if enabled
+    if (BLOOM_ON){
+        fwrite(&lsm->bloom->size, sizeof(index_t), 1, fout);
+        fwrite(&lsm->bloom->count, sizeof(index_t), 1, fout);
+        fwrite(lsm->bloom->table, sizeof(index_t), (lsm->bloom->size) / 8, fout);
+    }
     fclose(fout);
     free(filename);
 }
@@ -118,7 +131,7 @@ void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size){
     char *filename = (char*) malloc(16*sizeof(char) + sizeof(name));
     sprintf(filename,"%s/meta.data", name);
     FILE* fin = fopen(filename, "rb");
-    fread(lsm->name, sizeof(name), 1, fin);
+    fread(lsm->name, sizeof(char), lsm->filename_size, fin);
     // TODO: assertion on name
     fread(&lsm->Ne, sizeof(int), 1, fin);
     fread(&lsm->Nc, sizeof(int), 1, fin);
@@ -127,7 +140,14 @@ void read_lsm_from_disk(LSM_tree *lsm, char *name, int filename_size){
     lsm->Cs_size = (int *) malloc((lsm->Nc + 2)*sizeof(int));
     fread(lsm->Cs_size, sizeof(int), lsm->Nc + 2, fin);
     fread(lsm->Cs_Ne, sizeof(int), lsm->Nc + 2, fin);
-
+    if (BLOOM_ON){
+        index_t* size = (index_t *) malloc(sizeof(index_t));
+        fread(size, sizeof(index_t), 1, fin);
+        bloom_init(lsm->bloom, *size, HASHES);
+        fread(&lsm->bloom->count, sizeof(index_t), 1, fin);
+        fread(lsm->bloom->table, sizeof(index_t), (lsm->bloom->size) / 8, fin);
+        free(size);
+    }
     fclose(fin);
     free(filename);
 
@@ -220,6 +240,8 @@ void append_lsm(LSM_tree *lsm, int key, char *value){
 void insert_lsm(LSM_tree *lsm, int key, char *value){
     // increment total number of elements in the LSMTree
     lsm->Ne++;
+    // Insert to the bloom filter
+    if (BLOOM_ON) bloom_add(lsm->bloom, (uint64_t) key);
     append_lsm(lsm, key, value);
 }
 
@@ -231,6 +253,13 @@ int read_lsm(LSM_tree *lsm, int key, char* value){
     int* index = (int*) malloc(sizeof(int)); // -1 not found else found
     if (value == NULL) value = (char*) malloc(lsm->value_size*sizeof(char));
 
+    // Bloom filter check
+    if (BLOOM_ON && bloom_check(lsm->bloom, (uint64_t) key) == 0){
+        free(index);
+        if (VERBOSE) printf("Bloom check on for key %d\n", key);
+        return -1;
+    }
+
     // Linear scan in C0 (initialize index to -1)
     keys_linear_search(index, key, lsm->C0->keys, lsm->Cs_Ne[0]);
     if (*index != -1){
@@ -240,7 +269,8 @@ int read_lsm(LSM_tree *lsm, int key, char* value){
 
     // Reading buffer
     // Checking extreme of the buffer
-    if ((*index == -1) && (key >= lsm->buffer->keys[0]) && (key <= lsm->buffer->keys[lsm->Cs_Ne[1]-1])){
+    //if ((*index == -1) && (key >= lsm->buffer->keys[0]) && (key <= lsm->buffer->keys[lsm->Cs_Ne[1]-1])){
+    if (*index == -1){
         *index = binary_search(lsm->buffer->keys, key, 0, lsm->Cs_Ne[1]-1);
         if (*index != -1){
             if (VERBOSE == 1) printf("Key found in %s\n", lsm->buffer->component_id);
@@ -282,64 +312,6 @@ int read_lsm(LSM_tree *lsm, int key, char* value){
     return -1;
 }
 
-static void handler(int signum)
-{
-    // printf("Killing thread\n");
-    pthread_exit(NULL);
-}
-
-void *component_search_parallel(void *argument){
-    // Change the cancel state to asynchronous
-    // pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-    int index = -1;
-    // Reading argument
-    arg_thread *arg = (arg_thread *) argument;
-    arg_thread_common *common = (arg_thread_common*) arg->common;
-
-    // Getting filename of the disk component
-    char* filename = (char*) calloc(common->filename_size + 8,sizeof(char));
-    if (filename == NULL) {
-        fprintf(stderr, "failed to allocate memory.\n");
-        pthread_exit( (void*) index);
-    }
-    get_files_name_disk(filename, common->name, arg->thread_id, "k", common->filename_size);
-
-    // Printing arg
-    // printf("Inside Thread id: %d, key: %d, Cs_Ne: %d, filename: %s\n", arg->thread_id,
-    //        common->key, arg->Cs_Ne, filename);
-
-    // Mapping the file into memory
-    int fd = open(filename, O_RDONLY);
-    if (fd == -1){
-        perror("open");
-    }
-    int* keys = mmap(0, arg->Cs_Ne*sizeof(int), PROT_READ, MAP_SHARED, fd, 0);
-    if (keys == MAP_FAILED){
-        perror ("mmap");
-    }
-
-    // Checking extreme of the current component
-    if ((common->key >= keys[0]) && (common->key <= keys[arg->Cs_Ne-1])){
-        // Binary search
-        if (VERBOSE == 1) printf("Reading %s\n", filename);
-        index = binary_search(keys, common->key, 0, arg->Cs_Ne-1);                    
-    }
-
-    // Closing file
-    if (close(fd) == -1){
-        perror ("close");
-    }
-
-    // Free mmap memory
-    munmap(keys, arg->Cs_Ne*sizeof(int));
-    // Free thread_arg
-    free(filename);
-    free(arg);
-
-    pthread_exit( (void*) index);
-
-    // return (void *) (index);
-}
 
 // Read value of key in LSMTree lsm
 // return -1 if value not present, else index >=0 with value pointer
@@ -371,20 +343,27 @@ int read_lsm_parallel(LSM_tree *lsm, int key, char* value){
         int result_code;
         void *thread_result;
         pthread_t threads[lsm->Nc-1];
+        // Initialize the semaphore and the shared variable (gt any level)
+        mutex = (sem_t*) malloc(sizeof(sem_t));
+        mutex = sem_open("/mysemaphore", O_CREAT, 1);
+
         // Create common arguments of the threads
-        arg_thread_common* common = (arg_thread_common*) malloc(sizeof(arg_thread_common));
+        arg_thread_common* common = (arg_thread_common*) malloc(sizeof(arg_thread_common) + sizeof(int));
         common->key = key;
         common->filename_size = lsm->filename_size;
         common->name = lsm->name;
+        common->shared_level = (int *) malloc(sizeof(int));
+        *(common->shared_level) = lsm->Nc + 3;
+        // printf("Shared level init %d\n", *(common->shared_level));
 
         // V1: Associate signal with handler
-        struct sigaction actions;
-        memset(&actions, 0, sizeof(actions));
-        sigemptyset(&actions.sa_mask);
-        actions.sa_flags = 0;
-        actions.sa_handler = handler;
+        // struct sigaction actions;
+        // memset(&actions, 0, sizeof(actions));
+        // sigemptyset(&actions.sa_mask);
+        // actions.sa_flags = 0;
+        // actions.sa_handler = handler;
 
-        int rc = sigaction(SIGALRM,&actions,NULL);
+        // int rc = sigaction(SIGALRM,&actions,NULL);
         // V2: Associate signal with handler
         // signal(SIGUSR1, handler);
 
@@ -413,9 +392,9 @@ int read_lsm_parallel(LSM_tree *lsm, int key, char* value){
                 // If value was found by previous, next thread is cancelled
                 if (*index != -1) {
                     // TOFIX: Wait for the thread to finish
-                    // pthread_join(threads[j], &thread_result);
-                    pthread_kill(threads[j], SIGALRM);
-                    pthread_detach(threads[j]);
+                    pthread_join(threads[j], &thread_result);
+                    // pthread_kill(threads[j], SIGALRM);
+                    // pthread_detach(threads[j]);
                     continue;
                 }
                 result_code = pthread_join(threads[j], &thread_result);
@@ -433,7 +412,8 @@ int read_lsm_parallel(LSM_tree *lsm, int key, char* value){
             }
         }
         // Freeing memory
-        free(common);
+        // free(common->shared_level);
+        // free(common);
     }
     // Check if key found and not previously deleted
     if ((*index >= 0) && (*(value) != *TOMBSTONE)){
@@ -450,7 +430,11 @@ int read_lsm_parallel(LSM_tree *lsm, int key, char* value){
 // update will occur when merging (merge keep always the key in the
 // smallest component)
 void update_lsm(LSM_tree *lsm, int key, char *value){
-    // TODO: add bloom filter check
+    // Bloom filter check
+    if (BLOOM_ON && bloom_check(lsm->bloom, (uint64_t) key) == 0){
+        printf("UPDATE: Key %d was no present\n", key);
+        return;
+    }
     // Linear scan of C0
     int* index = (int*) malloc(sizeof(int));
     keys_linear_search(index, key, lsm->C0->keys, lsm->Cs_Ne[0]);

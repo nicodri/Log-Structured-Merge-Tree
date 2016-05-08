@@ -1,30 +1,5 @@
 // C program to merge k sorted arrays of size n each.
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <limits.h>
- 
-// A min heap node
-typedef struct MinHeapNode
-{
-    int element; // The element to be stored
-    int i; // index of the array from which the element is taken
-    int j; // index of the next element to be picked from array
-} MinHeapNode;
-
-typedef struct MinHeap
-{
-    MinHeapNode *harr; // pointer to array of elements in heap
-    int heap_size; // size of min heap    
-}MinHeap;
-
-// Declarations
-void MinHeap_init(MinHeap *minheap, MinHeapNode* a, int size);
-void MinHeapify(MinHeap * minheap, int i);
-MinHeapNode getMin(MinHeap *minheap);
-void replaceMin(MinHeap *minheap, MinHeapNode x);
-void swap(MinHeapNode *x, MinHeapNode *y);
-void mergeKArrays(int *output, int *arr, int k, int n);
+#include "LSMTree.h"
 
 // to get index of left child of node at index i
 int left(int i) { return (2*i + 1); }

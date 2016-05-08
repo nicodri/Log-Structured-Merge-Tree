@@ -27,6 +27,28 @@ int binary_search(int* keys, int key, int down, int top){
     return middle;
 }
 
+int binary_search_signal(int* keys, int key, int down, int top,
+                         int thread_level, int* shared_level, int next_check){
+    // printf("Thread %d next check %d\n", thread_level, next_check);
+    if (next_check == 0){
+        // printf("Thread %d check counter set to %d\n", thread_level, *shared_level);
+        // We dont use the semaphore to read
+        if (thread_level > *shared_level) return -1;
+        // reset the counter;
+        else next_check = FREQUENCE;
+    }
+    else next_check -= 1;
+    if (top < down) return -1;
+    int middle = (top + down)/2;
+    if (keys[middle] < key) return binary_search_signal(keys, key, middle+1, top,
+                                                        thread_level, shared_level,
+                                                        next_check);
+    if (keys[middle] > key) return binary_search_signal(keys, key, down, middle-1,
+                                                        thread_level, shared_level,
+                                                        next_check);
+    return middle;
+}
+
 // Linear search of key in (unsorted) keys. Set index to the position if found
 void keys_linear_search(int* index, int key, int* keys, int Ne){
     *index = -1;
