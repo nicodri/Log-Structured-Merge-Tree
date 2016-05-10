@@ -1,9 +1,9 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.16 (TeX Live 2015) (preloaded format=pdflatex 2015.9.2)  6 MAY 2016 18:28
+This is pdfTeX, Version 3.14159265-2.6-1.40.16 (TeX Live 2015) (preloaded format=pdflatex 2015.9.2)  10 MAY 2016 15:49
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**sig-alternate-sample.tex
-(./sig-alternate-sample.tex
+**report.tex
+(./report.tex
 LaTeX2e <2015/01/01>
 Babel <3.9l> and hyphenation patterns for 79 languages loaded.
 (./sig-alternate-05-2015.cls
@@ -228,9 +228,8 @@ Package: float 2001/11/08 v1.3d Float enhancements (AL)
 \float@box=\box30
 \@float@everytoks=\toks39
 \@floatcapt=\box31
-)
-(./sig-alternate-sample.aux)
-\openout1 = `sig-alternate-sample.aux'.
+) (./report.aux)
+\openout1 = `report.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 52.
 LaTeX Font Info:    ... okay on input line 52.
@@ -330,93 +329,109 @@ Overfull \hbox (9.11598pt too wide) in paragraph at lines 178--179
 
 
 ]
-<merge.png, id=16, 868.24374pt x 554.07pt>
-File: merge.png Graphic file (type png)
- <use merge.png>
-Package pdftex.def Info: merge.png used on input line 192.
-(pdftex.def)             Requested size: 201.59692pt x 128.6424pt.
- [2 <./merge.png>]
-<varlsm.png, id=25, 707.64375pt x 357.335pt>
-File: varlsm.png Graphic file (type png)
- <use varlsm.png>
-Package pdftex.def Info: varlsm.png used on input line 246.
+<img/merge.png, id=16, 868.24374pt x 554.07pt>
+File: img/merge.png Graphic file (type png)
+ <use img/merge.png>
+Package pdftex.def Info: img/merge.png used on input line 192.
+(pdftex.def)             Requested size: 240.0pt x 153.15175pt.
+
+Underfull \vbox (badness 2073) has occurred while \output is active []
+
+ [2 <./img/merge.png>] <img/varlsm.png, id=25, 707.64375pt x 357.335pt>
+File: img/varlsm.png Graphic file (type png)
+
+<use img/varlsm.png>
+Package pdftex.def Info: img/varlsm.png used on input line 246.
 (pdftex.def)             Requested size: 201.59692pt x 101.79791pt.
 
-<archi_generation.png, id=26, 438.63875pt x 294.09875pt>
-File: archi_generation.png Graphic file (type png)
+Underfull \vbox (badness 3439) has occurred while \output is active []
 
-<use archi_generation.png>
-Package pdftex.def Info: archi_generation.png used on input line 284.
-(pdftex.def)             Requested size: 151.20154pt x 101.3789pt.
- <archi_reads.png, id=27, 419.5675pt x 296.10625pt>
-File: archi_reads.png Graphic file (type png)
 
-<use archi_reads.png>
-Package pdftex.def Info: archi_reads.png used on input line 288.
-(pdftex.def)             Requested size: 151.20154pt x 106.70659pt.
- <archi_udpates.png, id=28, 424.58624pt x 298.11375pt>
-File: archi_udpates.png Graphic file (type png)
+<img/archi_generation.png, id=26, 438.63875pt x 294.09875pt>
+File: img/archi_generation.png Graphic file (type png)
 
-<use archi_udpates.png>
-Package pdftex.def Info: archi_udpates.png used on input line 292.
-(pdftex.def)             Requested size: 151.20154pt x 106.1609pt.
- <bloom_gene.png, id=29, 757.83125pt x 517.935pt>
-File: bloom_gene.png Graphic file (type png)
+<use img/archi_generation.png>
+Package pdftex.def Info: img/archi_generation.png used on input line 284.
+(pdftex.def)             Requested size: 161.28369pt x 108.1372pt.
 
-<use bloom_gene.png>
-Package pdftex.def Info: bloom_gene.png used on input line 298.
-(pdftex.def)             Requested size: 151.20154pt x 103.33226pt.
- <bloom_reading.png, id=30, 745.78625pt x 518.93875pt>
-File: bloom_reading.png Graphic file (type png)
+<img/archi_reads.png, id=27, 419.5675pt x 296.10625pt>
+File: img/archi_reads.png Graphic file (type png)
 
-<use bloom_reading.png>
-Package pdftex.def Info: bloom_reading.png used on input line 302.
-(pdftex.def)             Requested size: 151.20154pt x 105.2033pt.
- <bloom_updates.png, id=31, 756.8275pt x 525.965pt>
-File: bloom_updates.png Graphic file (type png)
+<use img/archi_reads.png>
+Package pdftex.def Info: img/archi_reads.png used on input line 288.
+(pdftex.def)             Requested size: 161.28369pt x 113.82278pt.
 
-<use bloom_updates.png>
-Package pdftex.def Info: bloom_updates.png used on input line 306.
-(pdftex.def)             Requested size: 151.20154pt x 105.07877pt.
- [3 <./varlsm.png>]
-<bounds_reads.png, id=36, 414.54875pt x 326.21875pt>
-File: bounds_reads.png Graphic file (type png)
- <use bounds_reads.png>
-Package pdftex.def Info: bounds_reads.png used on input line 329.
-(pdftex.def)             Requested size: 186.54521pt x 146.79707pt.
+<img/archi_udpates.png, id=28, 424.58624pt x 298.11375pt>
+File: img/archi_udpates.png Graphic file (type png)
+
+<use img/archi_udpates.png>
+Package pdftex.def Info: img/archi_udpates.png used on input line 292.
+(pdftex.def)             Requested size: 161.28369pt x 113.24345pt.
+ [3 <./img/varlsm.png>]
+<img/bloom_gene.png, id=33, 757.83125pt x 517.935pt>
+File: img/bloom_gene.png Graphic file (type png)
+ <use img/bloom_gene.png>
+Package pdftex.def Info: img/bloom_gene.png used on input line 313.
+(pdftex.def)             Requested size: 240.0pt x 164.01971pt.
+
+<img/bloom_reading.png, id=34, 745.78625pt x 518.93875pt>
+File: img/bloom_reading.png Graphic file (type png)
+
+<use img/bloom_reading.png>
+Package pdftex.def Info: img/bloom_reading.png used on input line 316.
+(pdftex.def)             Requested size: 240.0pt x 166.99815pt.
+
+<img/bloom_updates.png, id=35, 756.8275pt x 525.965pt>
+File: img/bloom_updates.png Graphic file (type png)
+
+<use img/bloom_updates.png>
+Package pdftex.def Info: img/bloom_updates.png used on input line 319.
+(pdftex.def)             Requested size: 240.0pt x 166.78737pt.
 
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
 
-(./sig-alternate-sample.bbl) [4 <./archi_generation.png> <./archi_reads.png> <.
-/archi_udpates.png> <./bloom_gene.png> <./bloom_reading.png> <./bloom_updates.p
-ng> <./bounds_reads.png>] (./sig-alternate-sample.aux) ) 
+Overfull \vbox (18.87398pt too high) has occurred while \output is active []
+
+
+[4 <./img/archi_generation.png> <./img/archi_reads.png> <./img/archi_udpates.pn
+g> <./img/bloom_gene.png> <./img/bloom_reading.png> <./img/bloom_updates.png>]
+<img/bounds_reads.png, id=45, 414.54875pt x 326.21875pt>
+File: img/bounds_reads.png Graphic file (type png)
+
+<use img/bounds_reads.png>
+Package pdftex.def Info: img/bounds_reads.png used on input line 327.
+(pdftex.def)             Requested size: 240.0pt x 188.85855pt.
+ (./report.bbl) [5
+
+ <./img/bounds_reads.png>]
+(./report.aux) ) 
 Here is how much of TeX's memory you used:
- 3282 strings out of 493089
- 42687 string characters out of 6134843
- 119791 words of memory out of 5000000
+ 3283 strings out of 493089
+ 42681 string characters out of 6134843
+ 119771 words of memory out of 5000000
  6652 multiletter control sequences out of 15000+600000
  59120 words of font info for 80 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 41i,10n,35p,1589b,465s stack positions out of 5000i,500n,10000p,200000b,80000s
-{/usr/local/texlive/201
-5/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/local/texlive/2015/texmf-dist/fo
-nts/type1/public/amsfonts/cm/cmbx9.pfb></usr/local/texlive/2015/texmf-dist/font
-s/type1/public/amsfonts/cm/cmmi6.pfb></usr/local/texlive/2015/texmf-dist/fonts/
-type1/public/amsfonts/cm/cmmi9.pfb></usr/local/texlive/2015/texmf-dist/fonts/ty
-pe1/public/amsfonts/cm/cmr6.pfb></usr/local/texlive/2015/texmf-dist/fonts/type1
-/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/2015/texmf-dist/fonts/type1/pu
-blic/amsfonts/cm/cmr9.pfb></usr/local/texlive/2015/texmf-dist/fonts/type1/publi
-c/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2015/texmf-dist/fonts/type1/public/
-amsfonts/cm/cmti9.pfb></usr/local/texlive/2015/texmf-dist/fonts/type1/urw/helve
-tic/uhvb8a.pfb></usr/local/texlive/2015/texmf-dist/fonts/type1/urw/helvetic/uhv
-r8a.pfb></usr/local/texlive/2015/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></
-usr/local/texlive/2015/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/
-texlive/2015/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on sig-alternate-sample.pdf (4 pages, 1177067 bytes).
+ 41i,10n,35p,1575b,465s stack positions out of 5000i,500n,10000p,200000b,80000s
+{/usr/local/texlive/2015/texmf-dist/fonts/enc/dvips/base/8r.enc
+}</usr/local/texlive/2015/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx9.pfb><
+/usr/local/texlive/2015/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></u
+sr/local/texlive/2015/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr
+/local/texlive/2015/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/lo
+cal/texlive/2015/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local
+/texlive/2015/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/te
+xlive/2015/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texl
+ive/2015/texmf-dist/fonts/type1/public/amsfonts/cm/cmti9.pfb></usr/local/texliv
+e/2015/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/local/texlive/2015/
+texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2015/texmf-d
+ist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2015/texmf-dist/fonts/
+type1/urw/times/utmr8a.pfb></usr/local/texlive/2015/texmf-dist/fonts/type1/urw/
+times/utmri8a.pfb>
+Output written on report.pdf (5 pages, 1177826 bytes).
 PDF statistics:
- 89 PDF objects out of 1000 (max. 8388607)
- 51 compressed objects within 1 object stream
+ 92 PDF objects out of 1000 (max. 8388607)
+ 53 compressed objects within 1 object stream
  0 named destinations out of 1000 (max. 500000)
  46 words of extra memory for PDF output out of 10000 (max. 10000000)
 

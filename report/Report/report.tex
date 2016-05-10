@@ -138,7 +138,7 @@ Nicolas Drizard\\
 
 \maketitle
 \begin{abstract}
-This project aims to build a data structure providing low-cost indexing for a file experiencing a high rate of record inserts/deletes over an extended period: a Log-Structured Merge-tree (LSM-tree) presented in \cite{lsm}. The LSM-Trees operate on batch for the inserts/updates, cascading the changes from its first compononent $C_0$ (memory based) to one or more larger components (disk-based). In this implementation, each component uses a sorted array (except for the first component) as data structure and the data operation READ, INSERT, UPDATE and DELETE are handled. The focus was on both having fast operations and a persistent implementation. The update rate is about 0.25M per second and the read rate about 22,5 K per second on flash storage.
+This project aims to build a data structure providing low-cost indexing for a file experiencing a high rate of record inserts/deletes over an extended period: a Log-Structured Merge-tree (LSM-tree) presented in \cite{lsm}. Efficient memory based data structure are not possible with a large number of records, especially being able to access any element is a requirement of the system. The LSM-Tree faces the challenge as it operates on batch for the inserts/updates, cascading the changes from its first compononent $C_0$ (memory based) to one or more larger components (disk-based). In this implementation, each component uses a sorted array (except for the first component) as data structure and the data operation READ, INSERT, UPDATE and DELETE are handled. The focus was on both having fast operations and a persistent implementation. The update rate is about 0.25M per second and the read rate about 22,5 K per second on flash storage.
 
 \end{abstract}
 
@@ -187,13 +187,13 @@ These operations aim to add/retrieve to the Tree a tuple (key, value). The key m
 
 The merging strategy when flushing a component to a lower one is another key choice. The core solution I implemented keeps one single array of keys for each component, with a size being a multiple of the array size of the component above it. This decision will benefit to the reads as we keep a single indexed structure for each component. The write may be more expensive as we have to do a binary merge of two sorted arrays each time we flush. The step-by-step process is described in the figure \ref{fig:merge}.
 
-\begin{figure}[H]
+\begin{figure}[H]%
 \begin{center}
-    \includegraphics[width=0.4\textwidth]{merge}
+    \includegraphics[width=\columnwidth]{img/merge}%
     \caption{Merging Strategy}
     \label{fig:merge}
 \end{center}
-\end{figure}
+\end{figure}%
 
 The behavior when flushing one component to the next one is the same for all the component, except for $C_0$ where we also sort it when flushing into the buffer (the deeper components will be sorted already). If the next component is empty, we just fill it, otherwise we merge the incoming array with the existing one to keep it sorted. If the resulting array reaches the deeper component threshold, we flush it to the next component and act recursively. This approach enables to implement right away a multi-components architecture for the LSM tree.
 
@@ -243,7 +243,7 @@ This variante is more optimized for the updates as less merges are required. How
 
 \begin{figure}[H]
 \begin{center}
-    \includegraphics[width=0.4\textwidth]{varlsm}
+    \includegraphics[width=0.4\textwidth]{img/varlsm}
     \caption{Alternative Merging Strategy}
 \end{center}
 \end{figure}
@@ -280,33 +280,19 @@ As expected, a larger size of $C_0$ leads to less merges so a better insertion t
 
 \begin{figure*}
 
-  \begin{minipage}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{archi_generation}
+  \begin{minipage}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{img/archi_generation}
   \end{minipage}
   \hfill
-  \begin{minipage}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{archi_reads}
+  \begin{minipage}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{img/archi_reads}
   \end{minipage}
   \hfill
-  \begin{minipage}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{archi_udpates}
+  \begin{minipage}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{img/archi_udpates}
   \end{minipage}
   \caption{LSM Tree Behavior on Reads \& Writes with different architectures}
   \label{fig:archi}
-  
-   \begin{minipage}[b]{0.3\textwidth}
-   \includegraphics[width=\textwidth]{bloom_gene}
-  \end{minipage}
-  \hfill
-  \begin{minipage}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{bloom_reading}
-  \end{minipage}
-  \hfill
-  \begin{minipage}[b]{0.3\textwidth}
-    \includegraphics[width=\textwidth]{bloom_updates}
-  \end{minipage}
-  \caption{LSM Tree Behavior on Reads \& Writes with Bloom filter}
-  \label{fig:bloom}
 \end{figure*}
 
 \subsection{Bloom Filter}
@@ -316,26 +302,40 @@ The behavior of the bloom filter depends also on its parameters: $K$ the number 
 
 We ran several workloads of reads and writes to observe the impact of these parameters. The three workloads presented in figure \ref{fig:bloom} are the following: generation of an LSM tree with different number of keys in unsorted order, reads and then updates in an LSM tree intially populated with $10^6$ keys inserted in unsorted order. We tested with different parameters for the Bloom Filter (varying $k$ and $m$) to observe the reads \& writes tradeoffs. We notice that the Bloom filter parameters impact the generation of the LSM Tree. With a large number of hashes each insertion in the bloom filter needs more time. Similarly, with a larger number of bits, more bits will be set to 1 for the same number of keys inserted. We see the same order of performance in the updates plots. The larger configuration (in number of hashes and number of bits) provides slower insertions. For the reads, we tested two workloads per configuration. The full one reads keys which are all present in the tree and the half one contains 50\% of the keys reads outside the tree. This latter workload shows how helpful could be the bloom filter feature, especially with suited parameters. On a large number of keys reads ($10^7$) the time to read dropped by 50\% on the half workload, because each key outside of the tree requires only one comparaison in the read to check if the bit in the bloom filter is set. And the more hashes/number of bits, the less false positive. Without the bloom filter or in case of false positive the entire tree needs to be scanned.
 
-
-
 \subsection{Bounds Check}
 
 This final experiment aims to quantify the impact of the bounds check feature added. This feature adds a range check when reading a sorted component. 
 
 We computed the reads throughput for different workloads on an LSM tree populated with 1M keys both in sorted or unsorted order and with or without the bounds check feature. In the results from the figure \ref{ref:bounds}, we first observe the large throughput obtained on an LSM tree populated with sorted keys on a workload skewed on the 20\% last keys. These keys were the last inserted so they are on the "surface" of the tree, mostly in memory so their access is really fast. Another observation is on the impact of the bounds check: it increases the throughput of 20\% on sorted insertions(because the component contain different ranges so the bounds check is always useful) but decreases it from 15\% on unsorted insertions. In this last case, the feature only adds an overhead with the new comparaison when accessing each component as it's less likely that a component contains a specific range. As a result, this feature should be activated when the LSM tree is populated with keys roughly sorted.
 
+\begin{figure}[H]
+   \begin{minipage}[b]{\columnwidth}
+    \includegraphics[width=\columnwidth]{img/bloom_gene}
+  \end{minipage}
+  \begin{minipage}[b]{\columnwidth}
+    \includegraphics[width=\columnwidth]{img/bloom_reading}
+  \end{minipage}
+  \begin{minipage}[b]{\columnwidth}
+    \includegraphics[width=\columnwidth]{img/bloom_updates}
+  \end{minipage}
+  \caption{LSM Tree Behavior on Reads \& Writes with Bloom filter}
+  \label{fig:bloom}
+\end{figure}
+
 \begin{figure}
 \centering
-\includegraphics[scale=0.45]{bounds_reads}
-\caption{Bounds Chexk experiments}
+\includegraphics[width=\columnwidth]{img/bounds_reads}
+\caption{Bounds Check experiments}
 \label{ref:bounds}
 \end{figure}
+
+
 
 \section{Conclusion}
 
 In conclusion, we implemented a fully functional LSM tree with a merging strategy more optimized for reads as each component contains only one sorted array. We added a Bloom Filter and bounds check to make the reads even more efficient. Future work could be to finish the implementation of the alternative merging strategy to add a parameter in the LSM tree defining which strategy to use. Another step is to validate the parallel implementation with more experiments. The current implementation, tested on a 4 core Macbook Pro, did not provide better performance than the serial implementaiton. Another experiment to validate the alternative merging strategy, theoretically more optimized for writes, could be considered too.
 
-\bibliographystyle{apalike}
+\bibstyle{abbrv}
 \bibliography{sigproc}
 
 \end{document}
